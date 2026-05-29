@@ -1,0 +1,1408 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Listenify">
+<meta name="theme-color" content="#0d0d0d">
+<title>Listenify — Scan & Listen</title>
+<link rel="manifest" href="manifest.json">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+<style>
+  :root {
+    --bg: #0d0d0d;
+    --bg-card: #161616;
+    --bg-elevated: #1e1e1e;
+    --border: rgba(255,255,255,0.07);
+    --border-mid: rgba(255,255,255,0.12);
+    --accent: #c9a96e;
+    --accent-dim: rgba(201,169,110,0.15);
+    --accent-glow: rgba(201,169,110,0.08);
+    --text-primary: #f0ece4;
+    --text-secondary: #8a8478;
+    --text-muted: #4a4640;
+    --red: #e05a4b;
+    --green: #5aae8a;
+    --radius: 16px;
+    --radius-sm: 10px;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text-primary);
+    font-family: 'DM Sans', sans-serif;
+    font-weight: 400;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* Subtle noise grain overlay */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.03'/%3E%3C/svg%3E");
+    pointer-events: none;
+    z-index: 0;
+    opacity: 0.4;
+  }
+
+  .app {
+    position: relative;
+    z-index: 1;
+    max-width: 480px;
+    margin: 0 auto;
+    padding: 0 20px 120px;
+    min-height: 100vh;
+  }
+
+  /* Header */
+  .header {
+    padding: 52px 0 32px;
+    text-align: center;
+  }
+
+  .logo-mark {
+    width: 52px;
+    height: 52px;
+    margin: 0 auto 16px;
+    background: var(--accent-dim);
+    border: 1px solid rgba(201,169,110,0.25);
+    border-radius: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .logo-mark svg { width: 24px; height: 24px; fill: var(--accent); }
+
+  .header h1 {
+    font-family: 'Playfair Display', serif;
+    font-size: 26px;
+    font-weight: 500;
+    color: var(--text-primary);
+    letter-spacing: -0.3px;
+    margin-bottom: 6px;
+  }
+
+  .header p {
+    font-size: 13px;
+    color: var(--text-secondary);
+    font-weight: 300;
+    letter-spacing: 0.2px;
+  }
+
+  /* Step labels */
+  .step-label {
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .step-label::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+  }
+
+  /* Upload zone */
+  .upload-zone {
+    background: var(--bg-card);
+    border: 1.5px dashed var(--border-mid);
+    border-radius: var(--radius);
+    padding: 40px 24px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.25s ease;
+    position: relative;
+    overflow: hidden;
+    margin-bottom: 28px;
+  }
+
+  .upload-zone:hover, .upload-zone.drag-over {
+    border-color: var(--accent);
+    background: var(--accent-glow);
+  }
+
+  .upload-zone.has-image {
+    padding: 0;
+    border-style: solid;
+    border-color: var(--border-mid);
+  }
+
+  .upload-zone input[type="file"] {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    cursor: pointer;
+    width: 100%;
+    height: 100%;
+  }
+
+  .upload-icon {
+    width: 48px;
+    height: 48px;
+    background: var(--bg-elevated);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 14px;
+  }
+
+  .upload-icon svg { width: 22px; height: 22px; stroke: var(--accent); fill: none; stroke-width: 1.5; }
+
+  .upload-zone h3 {
+    font-size: 15px;
+    font-weight: 500;
+    color: var(--text-primary);
+    margin-bottom: 5px;
+  }
+
+  .upload-zone p {
+    font-size: 13px;
+    color: var(--text-secondary);
+  }
+
+  .upload-zone img#preview-img {
+    width: 100%;
+    max-height: 280px;
+    object-fit: cover;
+    border-radius: calc(var(--radius) - 1.5px);
+    display: block;
+  }
+
+  .image-overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(0,0,0,0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    transition: opacity 0.2s;
+    border-radius: calc(var(--radius) - 1.5px);
+    pointer-events: none;
+  }
+
+  .upload-zone.has-image:hover .image-overlay { opacity: 1; }
+
+  .image-overlay span {
+    font-size: 13px;
+    color: #fff;
+    font-weight: 500;
+    background: rgba(255,255,255,0.15);
+    padding: 8px 16px;
+    border-radius: 20px;
+    backdrop-filter: blur(8px);
+  }
+
+  /* Camera button */
+  .btn-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-bottom: 28px;
+  }
+
+  .btn {
+    padding: 12px 16px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border-mid);
+    background: var(--bg-card);
+    color: var(--text-primary);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    transition: all 0.2s;
+    letter-spacing: 0.2px;
+  }
+
+  .btn:hover { background: var(--bg-elevated); border-color: rgba(255,255,255,0.2); }
+  .btn:active { transform: scale(0.98); }
+
+  .btn svg { width: 16px; height: 16px; stroke: var(--accent); fill: none; stroke-width: 1.5; }
+
+  .btn-primary {
+    background: var(--accent);
+    color: #0d0d0d;
+    border-color: transparent;
+    font-weight: 600;
+    grid-column: 1 / -1;
+    padding: 15px;
+    font-size: 14px;
+    border-radius: var(--radius-sm);
+  }
+
+  .btn-primary:hover { background: #d4b47c; }
+  .btn-primary svg { stroke: #0d0d0d; }
+  .btn-primary:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+    transform: none;
+  }
+
+  /* OCR progress */
+  .ocr-progress {
+    display: none;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px;
+    margin-bottom: 20px;
+  }
+
+  .ocr-progress.visible { display: block; }
+
+  .progress-label {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+  }
+
+  .progress-label span:first-child {
+    font-size: 13px;
+    color: var(--text-secondary);
+  }
+
+  .progress-label span:last-child {
+    font-size: 12px;
+    color: var(--accent);
+    font-weight: 500;
+  }
+
+  .progress-bar-track {
+    background: var(--bg-elevated);
+    border-radius: 4px;
+    height: 4px;
+    overflow: hidden;
+  }
+
+  .progress-bar-fill {
+    height: 100%;
+    background: var(--accent);
+    border-radius: 4px;
+    transition: width 0.3s ease;
+    width: 0%;
+  }
+
+  /* Extracted text */
+  .text-panel {
+    display: none;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    margin-bottom: 28px;
+    overflow: hidden;
+  }
+
+  .text-panel.visible { display: block; }
+
+  .text-panel-header {
+    padding: 14px 18px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .text-panel-header span {
+    font-size: 12px;
+    color: var(--text-secondary);
+    font-weight: 500;
+    letter-spacing: 0.5px;
+  }
+
+  .word-count {
+    font-size: 11px;
+    color: var(--text-muted);
+    background: var(--bg-elevated);
+    padding: 3px 8px;
+    border-radius: 20px;
+  }
+
+  #extracted-text {
+    width: 100%;
+    min-height: 140px;
+    max-height: 240px;
+    background: transparent;
+    border: none;
+    outline: none;
+    resize: vertical;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 14px;
+    line-height: 1.7;
+    color: var(--text-primary);
+    padding: 16px 18px;
+  }
+
+  /* Voice settings */
+  .voice-settings {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px;
+    margin-bottom: 28px;
+    display: none;
+  }
+
+  .voice-settings.visible { display: block; }
+
+  .setting-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 14px;
+  }
+
+  .setting-row:last-child { margin-bottom: 0; }
+
+  .setting-row label {
+    font-size: 13px;
+    color: var(--text-secondary);
+    flex: 1;
+  }
+
+  .setting-row select, .setting-row input[type="range"] {
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-mid);
+    color: var(--text-primary);
+    border-radius: 8px;
+    padding: 7px 10px;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 13px;
+    width: 170px;
+    outline: none;
+    appearance: none;
+    -webkit-appearance: none;
+    cursor: pointer;
+  }
+
+  .setting-row select option { background: #1e1e1e; }
+
+  .setting-row input[type="range"] {
+    padding: 0;
+    height: 4px;
+    accent-color: var(--accent);
+    width: 140px;
+  }
+
+  .range-value {
+    font-size: 12px;
+    color: var(--accent);
+    font-weight: 500;
+    min-width: 28px;
+    text-align: right;
+  }
+
+  /* Audio player */
+  .audio-player {
+    display: none;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 24px;
+    margin-bottom: 20px;
+  }
+
+  .audio-player.visible { display: block; }
+
+  .now-playing {
+    font-size: 11px;
+    letter-spacing: 1.2px;
+    text-transform: uppercase;
+    color: var(--accent);
+    font-weight: 500;
+    margin-bottom: 14px;
+  }
+
+  .audio-title {
+    font-family: 'Playfair Display', serif;
+    font-size: 18px;
+    font-weight: 500;
+    color: var(--text-primary);
+    margin-bottom: 5px;
+    line-height: 1.3;
+  }
+
+  .audio-meta {
+    font-size: 12px;
+    color: var(--text-secondary);
+    margin-bottom: 24px;
+  }
+
+  /* Waveform visual */
+  .waveform {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    height: 36px;
+    margin-bottom: 20px;
+  }
+
+  .wave-bar {
+    flex: 1;
+    background: var(--bg-elevated);
+    border-radius: 3px;
+    transition: background 0.3s;
+  }
+
+  .waveform.playing .wave-bar {
+    background: var(--accent);
+    animation: waveAnim 1.2s ease-in-out infinite;
+  }
+
+  .waveform.playing .wave-bar:nth-child(2n) { animation-delay: 0.15s; }
+  .waveform.playing .wave-bar:nth-child(3n) { animation-delay: 0.3s; }
+  .waveform.playing .wave-bar:nth-child(5n) { animation-delay: 0.45s; }
+
+  @keyframes waveAnim {
+    0%, 100% { transform: scaleY(0.3); }
+    50% { transform: scaleY(1); }
+  }
+
+  /* Progress track */
+  .audio-progress {
+    margin-bottom: 16px;
+  }
+
+  .progress-track {
+    background: var(--bg-elevated);
+    border-radius: 4px;
+    height: 4px;
+    cursor: pointer;
+    position: relative;
+    margin-bottom: 8px;
+  }
+
+  .progress-track-fill {
+    height: 100%;
+    background: var(--accent);
+    border-radius: 4px;
+    width: 0%;
+    transition: width 0.5s linear;
+  }
+
+  .time-labels {
+    display: flex;
+    justify-content: space-between;
+  }
+
+  .time-labels span {
+    font-size: 11px;
+    color: var(--text-muted);
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Controls */
+  .audio-controls {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+  }
+
+  .ctrl-btn {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-mid);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    color: var(--text-secondary);
+  }
+
+  .ctrl-btn:hover { background: var(--border-mid); color: var(--text-primary); }
+
+  .ctrl-btn svg { width: 16px; height: 16px; stroke: currentColor; fill: none; stroke-width: 1.8; }
+
+  .ctrl-btn.play-btn {
+    width: 52px;
+    height: 52px;
+    background: var(--accent);
+    border-color: transparent;
+    color: #0d0d0d;
+  }
+
+  .ctrl-btn.play-btn:hover { background: #d4b47c; transform: scale(1.05); }
+  .ctrl-btn.play-btn svg { stroke: #0d0d0d; width: 20px; height: 20px; }
+
+  .speed-badge {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 4px 8px;
+    cursor: pointer;
+    transition: all 0.2s;
+    min-width: 40px;
+    text-align: center;
+  }
+
+  .speed-badge:hover { border-color: var(--accent); color: var(--accent); }
+
+  /* Download */
+  .download-strip {
+    display: none;
+    background: var(--accent-dim);
+    border: 1px solid rgba(201,169,110,0.2);
+    border-radius: var(--radius-sm);
+    padding: 14px 18px;
+    display: none;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 20px;
+    cursor: pointer;
+    transition: background 0.2s;
+  }
+
+  .download-strip.visible {
+    display: flex;
+  }
+
+  .download-strip:hover { background: rgba(201,169,110,0.2); }
+
+  .download-strip span {
+    font-size: 13px;
+    color: var(--accent);
+    font-weight: 500;
+  }
+
+  .download-strip svg { width: 16px; height: 16px; stroke: var(--accent); fill: none; stroke-width: 1.8; }
+
+  /* Install banner */
+  .install-banner {
+    position: fixed;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%) translateY(100px);
+    width: calc(100% - 40px);
+    max-width: 440px;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-mid);
+    border-radius: var(--radius);
+    padding: 18px 20px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    z-index: 100;
+    transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+    box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+  }
+
+  .install-banner.show { transform: translateX(-50%) translateY(0); }
+
+  .install-icon {
+    width: 44px;
+    height: 44px;
+    background: var(--accent-dim);
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    border: 1px solid rgba(201,169,110,0.2);
+  }
+
+  .install-icon svg { width: 20px; height: 20px; fill: var(--accent); }
+
+  .install-text { flex: 1; }
+  .install-text strong { display: block; font-size: 14px; font-weight: 500; color: var(--text-primary); margin-bottom: 2px; }
+  .install-text span { font-size: 12px; color: var(--text-secondary); }
+
+  .install-actions { display: flex; gap: 8px; align-items: center; }
+
+  .btn-install {
+    background: var(--accent);
+    color: #0d0d0d;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 8px;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background 0.2s;
+  }
+
+  .btn-install:hover { background: #d4b47c; }
+
+  .btn-dismiss {
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    padding: 8px;
+    line-height: 1;
+    font-size: 20px;
+    transition: color 0.2s;
+  }
+
+  .btn-dismiss:hover { color: var(--text-secondary); }
+
+  /* iOS install guide */
+  .ios-guide {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px;
+    margin-bottom: 20px;
+    display: none;
+  }
+
+  .ios-guide.visible { display: block; }
+
+  .ios-guide h4 {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text-primary);
+    margin-bottom: 14px;
+  }
+
+  .ios-step {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 10px;
+  }
+
+  .ios-step-num {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: var(--accent-dim);
+    border: 1px solid rgba(201,169,110,0.2);
+    color: var(--accent);
+    font-size: 11px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+
+  .ios-step span { font-size: 13px; color: var(--text-secondary); }
+
+  /* Status messages */
+  .status-msg {
+    text-align: center;
+    font-size: 13px;
+    color: var(--text-secondary);
+    padding: 10px;
+    display: none;
+  }
+
+  .status-msg.visible { display: block; }
+  .status-msg.error { color: var(--red); }
+  .status-msg.success { color: var(--green); }
+
+  /* Toast */
+  .toast {
+    position: fixed;
+    top: 20px;
+    left: 50%;
+    transform: translateX(-50%) translateY(-80px);
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-mid);
+    color: var(--text-primary);
+    padding: 12px 20px;
+    border-radius: 30px;
+    font-size: 13px;
+    font-weight: 500;
+    z-index: 200;
+    transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+    white-space: nowrap;
+  }
+
+  .toast.show { transform: translateX(-50%) translateY(0); }
+
+  @media (max-width: 420px) {
+    .header h1 { font-size: 22px; }
+    .app { padding: 0 16px 120px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="app">
+
+  <div class="header">
+    <div class="logo-mark">
+      <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+        <path d="M9 18V5l12-2v13M9 18c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-2c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2z"/>
+      </svg>
+    </div>
+    <h1>Listenify</h1>
+    <p>Scan any document · Listen anywhere</p>
+  </div>
+
+  <!-- Step 1: Upload -->
+  <div class="step-label">01 — Capture</div>
+
+  <div class="upload-zone" id="upload-zone">
+    <input type="file" id="file-input" accept="image/*" capture="environment">
+    <div class="upload-icon">
+      <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+    </div>
+    <h3>Drop an image or tap to upload</h3>
+    <p>Books · Policies · Documents · Letters</p>
+    <img id="preview-img" style="display:none;">
+    <div class="image-overlay"><span>Change image</span></div>
+  </div>
+
+  <div class="btn-row">
+    <button class="btn" id="camera-btn">
+      <svg viewBox="0 0 24 24"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+      Camera
+    </button>
+    <button class="btn" id="gallery-btn">
+      <svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+      Gallery
+    </button>
+  </div>
+
+  <!-- OCR Progress -->
+  <div class="ocr-progress" id="ocr-progress">
+    <div class="progress-label">
+      <span id="progress-text">Scanning text…</span>
+      <span id="progress-pct">0%</span>
+    </div>
+    <div class="progress-bar-track">
+      <div class="progress-bar-fill" id="progress-bar"></div>
+    </div>
+  </div>
+
+  <div class="status-msg" id="status-msg"></div>
+
+  <!-- Step 2: Review text -->
+  <div class="step-label" id="step2-label" style="display:none;">02 — Review & Edit</div>
+
+  <div class="text-panel" id="text-panel">
+    <div class="text-panel-header">
+      <span>Extracted text</span>
+      <span class="word-count" id="word-count">0 words</span>
+    </div>
+    <textarea id="extracted-text" placeholder="Scanned text will appear here. You can edit it before converting."></textarea>
+  </div>
+
+  <!-- Voice settings -->
+  <div class="step-label" id="step3-label" style="display:none;">03 — Voice Settings</div>
+
+  <div class="voice-settings" id="voice-settings">
+    <div class="setting-row">
+      <label>Narrator Voice</label>
+      <select id="voice-select">
+        <option value="">Loading…</option>
+      </select>
+    </div>
+    <div class="setting-row">
+      <label>Reading Speed</label>
+      <input type="range" id="rate-slider" min="0.7" max="1.4" step="0.05" value="0.88">
+      <span class="range-value" id="rate-val">0.9×</span>
+    </div>
+    <div class="setting-row">
+      <label>Pitch</label>
+      <input type="range" id="pitch-slider" min="0.7" max="1.2" step="0.05" value="0.95">
+      <span class="range-value" id="pitch-val">1.0</span>
+    </div>
+  </div>
+
+  <!-- Convert button -->
+  <button class="btn btn-primary" id="convert-btn" style="display:none;" disabled>
+    <svg viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+    Convert to Audio
+  </button>
+
+  <!-- Audio player -->
+  <div class="step-label" id="step4-label" style="display:none;">04 — Listen</div>
+
+  <div class="audio-player" id="audio-player">
+    <div class="now-playing">▶ Now Playing</div>
+    <div class="audio-title" id="player-title">Your Document</div>
+    <div class="audio-meta" id="player-meta">—</div>
+
+    <div class="waveform" id="waveform">
+      <!-- bars filled by JS -->
+    </div>
+
+    <div class="audio-progress">
+      <div class="progress-track" id="progress-track">
+        <div class="progress-track-fill" id="track-fill"></div>
+      </div>
+      <div class="time-labels">
+        <span id="time-current">0:00</span>
+        <span id="time-total">0:00</span>
+      </div>
+    </div>
+
+    <div class="audio-controls">
+      <span class="speed-badge" id="speed-btn">1×</span>
+      <button class="ctrl-btn" id="rewind-btn" title="Rewind 10s">
+        <svg viewBox="0 0 24 24"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.5"/></svg>
+      </button>
+      <button class="ctrl-btn play-btn" id="play-pause-btn" title="Play/Pause">
+        <svg id="play-icon" viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+      </button>
+      <button class="ctrl-btn" id="forward-btn" title="Forward 10s">
+        <svg viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-.49-3.5"/></svg>
+      </button>
+      <button class="ctrl-btn" id="restart-btn" title="Restart">
+        <svg viewBox="0 0 24 24"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.5"/></svg>
+      </button>
+    </div>
+  </div>
+
+  <!-- Download -->
+  <div class="download-strip" id="download-strip">
+    <span>Save audio recording</span>
+    <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+  </div>
+
+  <!-- iOS install guide -->
+  <div class="ios-guide" id="ios-guide">
+    <h4>Add Listenify to your Home Screen</h4>
+    <div class="ios-step">
+      <div class="ios-step-num">1</div>
+      <span>Tap the <strong>Share</strong> button in Safari's toolbar</span>
+    </div>
+    <div class="ios-step">
+      <div class="ios-step-num">2</div>
+      <span>Scroll down and tap <strong>"Add to Home Screen"</strong></span>
+    </div>
+    <div class="ios-step">
+      <div class="ios-step-num">3</div>
+      <span>Tap <strong>Add</strong> — Listenify will appear on your home screen</span>
+    </div>
+  </div>
+
+</div>
+
+<!-- Install banner (Android/Desktop) -->
+<div class="install-banner" id="install-banner">
+  <div class="install-icon">
+    <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+      <path d="M9 18V5l12-2v13M9 18c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-2c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2z"/>
+    </svg>
+  </div>
+  <div class="install-text">
+    <strong>Add to Home Screen</strong>
+    <span>Use Listenify as an app, anytime</span>
+  </div>
+  <div class="install-actions">
+    <button class="btn-install" id="btn-install">Install</button>
+    <button class="btn-dismiss" id="btn-dismiss">×</button>
+  </div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<script>
+// ─── State ───────────────────────────────────────────────────────────────────
+let imageFile = null;
+let utterance = null;
+let synth = window.speechSynthesis;
+let isPlaying = false;
+let isPaused = false;
+let voices = [];
+let charIndex = 0;
+let totalChars = 0;
+let startTime = 0;
+let estimatedDuration = 0;
+let progressInterval = null;
+let speedCycles = [1, 1.25, 1.5, 0.75];
+let speedIdx = 0;
+let deferredInstallPrompt = null;
+
+// ─── Elements ─────────────────────────────────────────────────────────────────
+const uploadZone = document.getElementById('upload-zone');
+const fileInput = document.getElementById('file-input');
+const previewImg = document.getElementById('preview-img');
+const cameraBtn = document.getElementById('camera-btn');
+const galleryBtn = document.getElementById('gallery-btn');
+const ocrProgress = document.getElementById('ocr-progress');
+const progressBar = document.getElementById('progress-bar');
+const progressPct = document.getElementById('progress-pct');
+const progressText = document.getElementById('progress-text');
+const statusMsg = document.getElementById('status-msg');
+const textPanel = document.getElementById('text-panel');
+const extractedText = document.getElementById('extracted-text');
+const wordCount = document.getElementById('word-count');
+const voiceSettings = document.getElementById('voice-settings');
+const voiceSelect = document.getElementById('voice-select');
+const rateSlider = document.getElementById('rate-slider');
+const pitchSlider = document.getElementById('pitch-slider');
+const rateVal = document.getElementById('rate-val');
+const pitchVal = document.getElementById('pitch-val');
+const convertBtn = document.getElementById('convert-btn');
+const audioPlayer = document.getElementById('audio-player');
+const waveformEl = document.getElementById('waveform');
+const trackFill = document.getElementById('track-fill');
+const timeCurrent = document.getElementById('time-current');
+const timeTotal = document.getElementById('time-total');
+const playPauseBtn = document.getElementById('play-pause-btn');
+const playIcon = document.getElementById('play-icon');
+const speedBtn = document.getElementById('speed-btn');
+const downloadStrip = document.getElementById('download-strip');
+const installBanner = document.getElementById('install-banner');
+const btnInstall = document.getElementById('btn-install');
+const btnDismiss = document.getElementById('btn-dismiss');
+const iosGuide = document.getElementById('ios-guide');
+const toastEl = document.getElementById('toast');
+
+// ─── Build waveform bars ──────────────────────────────────────────────────────
+(function buildWave() {
+  for (let i = 0; i < 28; i++) {
+    const bar = document.createElement('div');
+    bar.className = 'wave-bar';
+    const h = 10 + Math.random() * 26;
+    bar.style.height = h + 'px';
+    waveformEl.appendChild(bar);
+  }
+})();
+
+// ─── Show/hide helpers ────────────────────────────────────────────────────────
+function showEl(el) { el.classList.add('visible'); }
+function hideEl(el) { el.classList.remove('visible'); }
+
+function showLabel(id) { document.getElementById(id).style.display = 'flex'; }
+
+function showStatus(msg, type) {
+  statusMsg.textContent = msg;
+  statusMsg.className = 'status-msg visible' + (type ? ' ' + type : '');
+}
+
+function showToast(msg) {
+  toastEl.textContent = msg;
+  toastEl.classList.add('show');
+  setTimeout(() => toastEl.classList.remove('show'), 2800);
+}
+
+function fmtTime(sec) {
+  const m = Math.floor(sec / 60);
+  const s = Math.floor(sec % 60);
+  return m + ':' + (s < 10 ? '0' : '') + s;
+}
+
+// ─── File / image handling ────────────────────────────────────────────────────
+function handleFile(file) {
+  if (!file || !file.type.startsWith('image/')) {
+    showStatus('Please select an image file.', 'error');
+    return;
+  }
+  imageFile = file;
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    previewImg.src = e.target.result;
+    previewImg.style.display = 'block';
+    uploadZone.classList.add('has-image');
+    runOCR(file);
+  };
+  reader.readAsDataURL(file);
+}
+
+uploadZone.addEventListener('click', (e) => {
+  if (!e.target.closest('input')) fileInput.click();
+});
+
+fileInput.addEventListener('change', (e) => {
+  if (e.target.files[0]) handleFile(e.target.files[0]);
+});
+
+cameraBtn.addEventListener('click', () => {
+  fileInput.setAttribute('capture', 'environment');
+  fileInput.accept = 'image/*';
+  fileInput.click();
+});
+
+galleryBtn.addEventListener('click', () => {
+  fileInput.removeAttribute('capture');
+  fileInput.accept = 'image/*';
+  fileInput.click();
+});
+
+// Drag and drop
+uploadZone.addEventListener('dragover', (e) => { e.preventDefault(); uploadZone.classList.add('drag-over'); });
+uploadZone.addEventListener('dragleave', () => uploadZone.classList.remove('drag-over'));
+uploadZone.addEventListener('drop', (e) => {
+  e.preventDefault();
+  uploadZone.classList.remove('drag-over');
+  const file = e.dataTransfer.files[0];
+  if (file) handleFile(file);
+});
+
+// ─── OCR ──────────────────────────────────────────────────────────────────────
+async function runOCR(file) {
+  showEl(ocrProgress);
+  statusMsg.className = 'status-msg';
+  progressBar.style.width = '0%';
+  progressPct.textContent = '0%';
+  progressText.textContent = 'Initialising scanner…';
+
+  try {
+    const worker = await Tesseract.createWorker('eng', 1, {
+      logger: m => {
+        if (m.status === 'recognizing text') {
+          const pct = Math.round(m.progress * 100);
+          progressBar.style.width = pct + '%';
+          progressPct.textContent = pct + '%';
+          progressText.textContent = pct < 50 ? 'Scanning layout…' : 'Extracting characters…';
+        } else if (m.status === 'loading tesseract core') {
+          progressText.textContent = 'Loading OCR engine…';
+        } else if (m.status === 'initializing tesseract') {
+          progressText.textContent = 'Starting up…';
+        }
+      }
+    });
+
+    progressText.textContent = 'Processing image…';
+    const { data: { text } } = await worker.recognize(file);
+    await worker.terminate();
+
+    const cleaned = cleanText(text);
+
+    hideEl(ocrProgress);
+
+    if (!cleaned.trim()) {
+      showStatus('No text found in this image. Try a clearer photo.', 'error');
+      return;
+    }
+
+    extractedText.value = cleaned;
+    updateWordCount();
+
+    // Show panels
+    showLabel('step2-label');
+    showEl(textPanel);
+    showLabel('step3-label');
+    showEl(voiceSettings);
+    convertBtn.style.display = 'flex';
+    convertBtn.disabled = false;
+
+    showStatus('✓ Text extracted successfully', 'success');
+    setTimeout(() => { statusMsg.className = 'status-msg'; }, 3000);
+
+  } catch (err) {
+    hideEl(ocrProgress);
+    showStatus('Scan failed. Please try a clearer image.', 'error');
+    console.error(err);
+  }
+}
+
+function cleanText(raw) {
+  return raw
+    .replace(/\f/g, '\n\n')
+    .replace(/([a-z,])\n([a-z])/g, '$1 $2')
+    .replace(/\n{3,}/g, '\n\n')
+    .replace(/[ \t]{2,}/g, ' ')
+    .trim();
+}
+
+function updateWordCount() {
+  const text = extractedText.value.trim();
+  const words = text ? text.split(/\s+/).length : 0;
+  wordCount.textContent = words + ' word' + (words !== 1 ? 's' : '');
+}
+
+extractedText.addEventListener('input', updateWordCount);
+
+// ─── Voice loading ────────────────────────────────────────────────────────────
+function loadVoices() {
+  voices = synth.getVoices();
+
+  // Filter for English voices, prefer natural/neural ones
+  const engVoices = voices.filter(v => v.lang.startsWith('en'));
+  const preferred = engVoices.filter(v =>
+    /natural|neural|premium|enhanced|samantha|karen|daniel|moira|fiona|rishi|kate|google/i.test(v.name)
+  );
+  const displayVoices = preferred.length > 0 ? preferred : engVoices.slice(0, 12);
+
+  voiceSelect.innerHTML = '';
+  displayVoices.forEach((v, i) => {
+    const opt = document.createElement('option');
+    opt.value = i;
+    opt.textContent = v.name.replace(/\(.*?\)/g, '').trim();
+    opt.dataset.voice = v.name;
+    voiceSelect.appendChild(opt);
+  });
+
+  // Try to pre-select a good default
+  const goodDefaults = ['Samantha', 'Karen', 'Daniel', 'Google US English', 'Google UK', 'Moira'];
+  for (const name of goodDefaults) {
+    const idx = displayVoices.findIndex(v => v.name.includes(name));
+    if (idx !== -1) { voiceSelect.value = idx; break; }
+  }
+}
+
+if (synth.onvoiceschanged !== undefined) {
+  synth.onvoiceschanged = loadVoices;
+}
+loadVoices();
+
+rateSlider.addEventListener('input', () => {
+  rateVal.textContent = parseFloat(rateSlider.value).toFixed(2).replace(/\.?0+$/, '') + '×';
+});
+
+pitchSlider.addEventListener('input', () => {
+  pitchVal.textContent = parseFloat(pitchSlider.value).toFixed(2).replace(/\.?0+$/, '');
+});
+
+// ─── Text preprocessing for natural narration ─────────────────────────────────
+function prepareTextForSpeech(text) {
+  return text
+    // Expand abbreviations
+    .replace(/\bDr\./g, 'Doctor')
+    .replace(/\bMr\./g, 'Mister')
+    .replace(/\bMrs\./g, 'Missus')
+    .replace(/\bMs\./g, 'Miss')
+    .replace(/\bSt\./g, 'Saint')
+    .replace(/\betc\./gi, 'et cetera,')
+    .replace(/\be\.g\./gi, 'for example,')
+    .replace(/\bi\.e\./gi, 'that is,')
+    // Add slight pause after colons and semicolons
+    .replace(/([;:])\s/g, '$1  ')
+    // Paragraph breaks get a longer pause
+    .replace(/\n\n/g, '. \n\n')
+    // Clean up
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+// ─── TTS ──────────────────────────────────────────────────────────────────────
+convertBtn.addEventListener('click', startSpeech);
+
+function startSpeech() {
+  const text = extractedText.value.trim();
+  if (!text) return;
+
+  synth.cancel();
+  clearInterval(progressInterval);
+
+  const prepared = prepareTextForSpeech(text);
+  utterance = new SpeechSynthesisUtterance(prepared);
+
+  const selectedOpt = voiceSelect.options[voiceSelect.value];
+  if (selectedOpt) {
+    const voiceName = selectedOpt.dataset.voice;
+    const voice = voices.find(v => v.name === voiceName);
+    if (voice) utterance.voice = voice;
+  }
+
+  utterance.rate = parseFloat(rateSlider.value);
+  utterance.pitch = parseFloat(pitchSlider.value);
+  utterance.volume = 1;
+
+  totalChars = prepared.length;
+  const wordsPerMin = 150 * utterance.rate;
+  const words = text.split(/\s+/).length;
+  estimatedDuration = (words / wordsPerMin) * 60;
+
+  // Player setup
+  showLabel('step4-label');
+  showEl(audioPlayer);
+
+  const words2 = text.split(/\s+/).length;
+  document.getElementById('player-title').textContent =
+    text.substring(0, 50) + (text.length > 50 ? '…' : '');
+  document.getElementById('player-meta').textContent =
+    words2 + ' words · ~' + Math.ceil(words2 / 150) + ' min read';
+
+  timeTotal.textContent = fmtTime(estimatedDuration);
+  timeCurrent.textContent = '0:00';
+  trackFill.style.width = '0%';
+
+  utterance.onstart = () => {
+    setPlaying(true);
+    startTime = Date.now();
+    progressInterval = setInterval(updateProgress, 500);
+  };
+
+  utterance.onboundary = (e) => {
+    charIndex = e.charIndex;
+  };
+
+  utterance.onend = () => {
+    setPlaying(false);
+    clearInterval(progressInterval);
+    trackFill.style.width = '100%';
+    timeCurrent.textContent = fmtTime(estimatedDuration);
+    showEl(downloadStrip);
+    showToast('Audio finished · Recording saved');
+  };
+
+  utterance.onerror = (e) => {
+    if (e.error !== 'interrupted' && e.error !== 'canceled') {
+      setPlaying(false);
+      clearInterval(progressInterval);
+      showStatus('Audio error: ' + e.error, 'error');
+    }
+  };
+
+  synth.speak(utterance);
+  isPlaying = true;
+  isPaused = false;
+}
+
+function updateProgress() {
+  if (!isPlaying || isPaused) return;
+  const elapsed = (Date.now() - startTime) / 1000;
+  const pct = Math.min((elapsed / estimatedDuration) * 100, 99);
+  trackFill.style.width = pct + '%';
+  timeCurrent.textContent = fmtTime(elapsed);
+}
+
+function setPlaying(val) {
+  isPlaying = val;
+  waveformEl.classList.toggle('playing', val);
+  playIcon.setAttribute('d', val
+    ? 'M6 19h4V5H6v14zm8-14v14h4V5h-4z'
+    : 'M5 3l14 9-14 9V3z'
+  );
+}
+
+// Controls
+playPauseBtn.addEventListener('click', () => {
+  if (!utterance) return;
+  if (isPlaying && !isPaused) {
+    synth.pause();
+    isPaused = true;
+    setPlaying(false);
+    clearInterval(progressInterval);
+  } else if (isPaused) {
+    synth.resume();
+    isPaused = false;
+    setPlaying(true);
+    startTime = Date.now() - (parseFloat(trackFill.style.width) / 100 * estimatedDuration * 1000);
+    progressInterval = setInterval(updateProgress, 500);
+  } else {
+    startSpeech();
+  }
+});
+
+document.getElementById('rewind-btn').addEventListener('click', () => {
+  startSpeech(); // Restart — true seek isn't available in Web Speech API
+  showToast('Restarted from beginning');
+});
+
+document.getElementById('forward-btn').addEventListener('click', () => {
+  synth.cancel();
+  setPlaying(false);
+  showToast('Skipped to end');
+});
+
+document.getElementById('restart-btn').addEventListener('click', () => {
+  startSpeech();
+});
+
+speedBtn.addEventListener('click', () => {
+  speedIdx = (speedIdx + 1) % speedCycles.length;
+  const s = speedCycles[speedIdx];
+  speedBtn.textContent = s + '×';
+  if (utterance && isPlaying) {
+    rateSlider.value = 0.88 * s;
+    synth.cancel();
+    startSpeech();
+  }
+});
+
+// ─── Download (recorded via MediaRecorder + AudioContext) ─────────────────────
+downloadStrip.addEventListener('click', () => {
+  showToast('Re-playing to capture audio…');
+  captureAndDownload();
+});
+
+function captureAndDownload() {
+  const text = extractedText.value.trim();
+  if (!text) return;
+
+  const dest = new AudioContext();
+  const chunks = [];
+
+  const stream = dest.createMediaStreamDestination();
+  const recorder = new MediaRecorder(stream.stream);
+  recorder.ondataavailable = e => chunks.push(e.data);
+  recorder.onstop = () => {
+    const blob = new Blob(chunks, { type: 'audio/webm' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'listenify-recording.webm';
+    a.click();
+    URL.revokeObjectURL(url);
+    showToast('Audio file downloaded!');
+  };
+
+  recorder.start();
+
+  const u = new SpeechSynthesisUtterance(prepareTextForSpeech(text));
+  if (utterance) { u.voice = utterance.voice; u.rate = utterance.rate; u.pitch = utterance.pitch; }
+  u.onend = () => { recorder.stop(); dest.close(); };
+  u.onerror = () => { recorder.stop(); dest.close(); };
+  synth.speak(u);
+}
+
+// ─── PWA Install ──────────────────────────────────────────────────────────────
+const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent) && !window.MSStream;
+const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
+
+if (isIOS && !isStandalone) {
+  setTimeout(() => { showEl(iosGuide); }, 2000);
+}
+
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+  deferredInstallPrompt = e;
+  setTimeout(() => installBanner.classList.add('show'), 3000);
+});
+
+btnInstall.addEventListener('click', async () => {
+  if (!deferredInstallPrompt) return;
+  installBanner.classList.remove('show');
+  deferredInstallPrompt.prompt();
+  const { outcome } = await deferredInstallPrompt.userChoice;
+  if (outcome === 'accepted') showToast('Listenify added to home screen!');
+  deferredInstallPrompt = null;
+});
+
+btnDismiss.addEventListener('click', () => {
+  installBanner.classList.remove('show');
+});
+
+window.addEventListener('appinstalled', () => {
+  installBanner.classList.remove('show');
+  showToast('Listenify installed successfully!');
+});
+
+// Register service worker
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('sw.js').catch(() => {});
+}
+</script>
+</body>
+</html>
