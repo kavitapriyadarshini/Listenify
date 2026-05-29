@@ -215,12 +215,11 @@
     display: none;
     position: fixed;
     inset: 0;
-    background: rgba(0,0,0,0.92);
+    background: #000;
     z-index: 500;
     flex-direction: column;
     align-items: center;
     justify-content: flex-start;
-    padding: 0;
   }
 
   .editor-modal.open { display: flex; }
@@ -233,6 +232,7 @@
     padding: 16px 20px;
     border-bottom: 1px solid rgba(255,255,255,0.08);
     flex-shrink: 0;
+    z-index: 2;
   }
 
   .editor-topbar span {
@@ -266,18 +266,108 @@
     justify-content: center;
     overflow: hidden;
     position: relative;
-    padding: 16px;
-  }
-
-  #editor-canvas {
-    max-width: 100%;
-    max-height: 100%;
-    display: block;
-    cursor: crosshair;
+    padding: 20px;
     touch-action: none;
   }
 
-  /* Crop overlay drawn on canvas - handled in JS */
+  /* The actual image shown in editor */
+  #editor-img-display {
+    display: block;
+    max-width: 100%;
+    max-height: 100%;
+    width: auto;
+    height: auto;
+    object-fit: contain;
+    image-rendering: -webkit-optimize-contrast;
+    image-rendering: crisp-edges;
+    user-select: none;
+    pointer-events: none;
+    position: relative;
+    z-index: 0;
+  }
+
+  /* Crop overlay sits on top of image */
+  #crop-overlay {
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    z-index: 1;
+    touch-action: none;
+  }
+
+  /* Dark masks - 4 divs surrounding the crop box */
+  .crop-mask {
+    position: absolute;
+    background: rgba(0,0,0,0.62);
+    pointer-events: none;
+  }
+
+  /* The crop box border */
+  #crop-box {
+    position: absolute;
+    border: 1.5px solid rgba(255,255,255,0.85);
+    box-sizing: border-box;
+    cursor: move;
+    touch-action: none;
+  }
+
+  /* Rule of thirds lines inside crop box */
+  #crop-box::before, #crop-box::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+  }
+
+  #crop-box::before {
+    background:
+      linear-gradient(rgba(255,255,255,0.18) 1px, transparent 1px) 0 33.33%/100% 1px,
+      linear-gradient(rgba(255,255,255,0.18) 1px, transparent 1px) 0 66.66%/100% 1px,
+      linear-gradient(90deg, rgba(255,255,255,0.18) 1px, transparent 1px) 33.33% 0/1px 100%,
+      linear-gradient(90deg, rgba(255,255,255,0.18) 1px, transparent 1px) 66.66% 0/1px 100%;
+  }
+
+  /* Corner handles */
+  .crop-handle {
+    position: absolute;
+    width: 22px;
+    height: 22px;
+    touch-action: none;
+  }
+
+  .crop-handle::before, .crop-handle::after {
+    content: '';
+    position: absolute;
+    background: #c9a96e;
+  }
+
+  /* L-shape arms — 18px long, 3px thick */
+  .crop-handle.tl::before { top:0; left:0; width:18px; height:3px; }
+  .crop-handle.tl::after  { top:0; left:0; width:3px; height:18px; }
+  .crop-handle.tr::before { top:0; right:0; width:18px; height:3px; }
+  .crop-handle.tr::after  { top:0; right:0; width:3px; height:18px; }
+  .crop-handle.bl::before { bottom:0; left:0; width:18px; height:3px; }
+  .crop-handle.bl::after  { bottom:0; left:0; width:3px; height:18px; }
+  .crop-handle.br::before { bottom:0; right:0; width:18px; height:3px; }
+  .crop-handle.br::after  { bottom:0; right:0; width:3px; height:18px; }
+
+  /* Position handles at corners */
+  .crop-handle.tl { top: -3px; left: -3px; cursor: nw-resize; }
+  .crop-handle.tr { top: -3px; right: -3px; cursor: ne-resize; }
+  .crop-handle.bl { bottom: -3px; left: -3px; cursor: sw-resize; }
+  .crop-handle.br { bottom: -3px; right: -3px; cursor: se-resize; }
+
+  /* Edge mid handles */
+  .crop-handle.tm, .crop-handle.bm, .crop-handle.lm, .crop-handle.rm {
+    width: 28px; height: 28px;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .crop-handle.tm { top:-14px; left:50%; transform:translateX(-50%); cursor:n-resize; }
+  .crop-handle.bm { bottom:-14px; left:50%; transform:translateX(-50%); cursor:s-resize; }
+  .crop-handle.lm { left:-14px; top:50%; transform:translateY(-50%); cursor:w-resize; }
+  .crop-handle.rm { right:-14px; top:50%; transform:translateY(-50%); cursor:e-resize; }
+  .crop-handle.tm::before,.crop-handle.bm::before { width:20px; height:3px; position:absolute; background:#c9a96e; border-radius:2px; }
+  .crop-handle.lm::before,.crop-handle.rm::before { width:3px; height:20px; position:absolute; background:#c9a96e; border-radius:2px; }
+  .crop-handle.tm::after,.crop-handle.bm::after,.crop-handle.lm::after,.crop-handle.rm::after { display:none; }
 
   .editor-toolbar {
     width: 100%;
@@ -308,7 +398,6 @@
 
   .tool-btn:hover { background: rgba(255,255,255,0.1); color: var(--text-primary); }
   .tool-btn.active { border-color: var(--accent); color: var(--accent); background: var(--accent-dim); }
-
   .tool-btn svg { width: 20px; height: 20px; stroke: currentColor; fill: none; stroke-width: 1.5; }
   .tool-btn span { font-size: 11px; font-weight: 500; letter-spacing: 0.3px; }
 
@@ -317,6 +406,8 @@
     height: 40px;
     background: rgba(255,255,255,0.08);
   }
+
+
 
   /* Camera button */
   .btn-row {
@@ -926,18 +1017,23 @@
     <div class="setting-row">
       <label>Narrator Voice</label>
       <select id="voice-select">
-        <option value="">Loading…</option>
+        <option value="9BWtsMINqrJLrRacOk9x">Aria — Indian Female</option>
+        <option value="CwhRBWXzGAHq8TQ4Fs17">Roger — Indian Male</option>
+        <option value="EXAVITQu4vr4xnSDxMaL">Sarah — Warm Female</option>
+        <option value="TX3LPaxmHKxFdv7VOQHJ">Liam — Calm Male</option>
+        <option value="XB0fDUnXU5powFXDhCwa">Charlotte — Expressive Female</option>
+        <option value="pFZP5JQG7iQjIQuC4Bku">Lily — Soft Female</option>
       </select>
     </div>
     <div class="setting-row">
       <label>Reading Speed</label>
-      <input type="range" id="rate-slider" min="0.7" max="1.4" step="0.05" value="0.88">
+      <input type="range" id="rate-slider" min="0.7" max="1.2" step="0.05" value="0.9">
       <span class="range-value" id="rate-val">0.9×</span>
     </div>
     <div class="setting-row">
-      <label>Pitch</label>
-      <input type="range" id="pitch-slider" min="0.7" max="1.2" step="0.05" value="0.95">
-      <span class="range-value" id="pitch-val">1.0</span>
+      <label>Stability</label>
+      <input type="range" id="pitch-slider" min="0.3" max="0.9" step="0.05" value="0.45">
+      <span class="range-value" id="pitch-val">0.45</span>
     </div>
   </div>
 
@@ -1036,25 +1132,24 @@
     <button class="btn-done" id="editor-done">Use Image</button>
   </div>
 
-  <div class="editor-canvas-wrap">
-    <canvas id="editor-canvas"></canvas>
+  <div class="editor-canvas-wrap" id="editor-canvas-wrap">
+    <img id="editor-img-display" src="" alt="">
+    <div id="crop-overlay">
+      <!-- masks and crop-box injected by JS -->
+    </div>
   </div>
 
   <div class="editor-toolbar">
-    <button class="tool-btn" id="tool-rotate-ccw" title="Rotate 90° left">
+    <button class="tool-btn" id="tool-rotate-ccw">
       <svg viewBox="0 0 24 24"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.5"/></svg>
       <span>Rotate L</span>
     </button>
-    <button class="tool-btn" id="tool-rotate-cw" title="Rotate 90° right">
+    <button class="tool-btn" id="tool-rotate-cw">
       <svg viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-.49-3.5"/></svg>
       <span>Rotate R</span>
     </button>
     <div class="tool-divider"></div>
-    <button class="tool-btn active" id="tool-crop" title="Crop">
-      <svg viewBox="0 0 24 24"><polyline points="6 2 6 18 22 18"/><polyline points="2 6 18 6 18 22"/></svg>
-      <span>Crop</span>
-    </button>
-    <button class="tool-btn" id="tool-reset" title="Reset">
+    <button class="tool-btn" id="tool-reset">
       <svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
       <span>Reset</span>
     </button>
@@ -1067,14 +1162,8 @@
 <script>
 // ─── State ───────────────────────────────────────────────────────────────────
 let imageFile = null;
-let utterance = null;
-let synth = window.speechSynthesis;
 let isPlaying = false;
 let isPaused = false;
-let voices = [];
-let charIndex = 0;
-let totalChars = 0;
-let startTime = 0;
 let estimatedDuration = 0;
 let progressInterval = null;
 let speedCycles = [1, 1.25, 1.5, 0.75];
@@ -1199,258 +1288,239 @@ uploadZone.addEventListener('drop', (e) => {
 });
 
 // ─── Image Editor ─────────────────────────────────────────────────────────────
-const editorModal = document.getElementById('editor-modal');
-const editorCanvas = document.getElementById('editor-canvas');
-const ctx = editorCanvas.getContext('2d');
+// ─── Image Editor (DOM overlay crop) ─────────────────────────────────────────
+const editorModal   = document.getElementById('editor-modal');
+const editorImgEl   = document.getElementById('editor-img-display');
+const cropOverlay   = document.getElementById('crop-overlay');
+const editorWrap    = document.getElementById('editor-canvas-wrap');
 
-let editorImg = new Image();
-let rotation = 0;
-let originalSrc = null;
+let editorImg    = new Image();
+let rotation     = 0;
+let originalSrc  = null;
 
-// Crop state — always covers full image initially, user drags handles to adjust
-let crop = { x: 0, y: 0, w: 0, h: 0 }; // in canvas display coords
+// Crop rect as % of displayed image (0–1), so it's resolution-independent
+let cropPct = { x: 0, y: 0, w: 1, h: 1 };
 
 // Drag state
-const HANDLE_SIZE = 22; // touch-friendly handle hit area
-let dragMode = null; // 'tl','tr','bl','br','t','b','l','r','move', null
-let dragStart = null;
-let cropAtDragStart = null;
+let activeDrag  = null; // { mode, startX, startY, startCrop }
 
 function openEditor(src) {
   originalSrc = src;
   rotation = 0;
+  cropPct = { x: 0, y: 0, w: 1, h: 1 };
   editorImg = new Image();
   editorImg.onload = () => {
+    editorImgEl.src = src;
+    editorImgEl.style.transform = 'rotate(0deg)';
     editorModal.classList.add('open');
-    // Small delay so modal is visible and has dimensions
-    setTimeout(() => {
-      renderEditor();
-      resetCropToFull();
-    }, 60);
+    // Wait for layout to settle, then build overlay
+    requestAnimationFrame(() => requestAnimationFrame(() => buildOverlay()));
   };
   editorImg.src = src;
 }
 
-function getCanvasSize() {
-  const wrap = document.querySelector('.editor-canvas-wrap');
-  const maxW = wrap.clientWidth - 32;
-  const maxH = wrap.clientHeight - 32;
+function applyRotationToDisplay() {
+  editorImgEl.style.transform = `rotate(${rotation * 90}deg)`;
+  // When rotated 90/270, swap visual dimensions so image fits container
   const rotated = rotation % 2 !== 0;
-  const imgW = rotated ? editorImg.height : editorImg.width;
-  const imgH = rotated ? editorImg.width : editorImg.height;
-  const scale = Math.min(maxW / imgW, maxH / imgH, 1);
-  return { w: Math.round(imgW * scale), h: Math.round(imgH * scale) };
-}
-
-function resetCropToFull() {
-  const { w, h } = getCanvasSize();
-  crop = { x: 0, y: 0, w, h };
-  renderEditor();
-}
-
-function clampCrop() {
-  const { w, h } = getCanvasSize();
-  const minSize = 40;
-  crop.w = Math.max(minSize, Math.min(crop.w, w - crop.x));
-  crop.h = Math.max(minSize, Math.min(crop.h, h - crop.y));
-  crop.x = Math.max(0, Math.min(crop.x, w - crop.w));
-  crop.y = Math.max(0, Math.min(crop.y, h - crop.h));
-}
-
-function renderEditor() {
-  const { w, h } = getCanvasSize();
-  editorCanvas.width = w;
-  editorCanvas.height = h;
-  ctx.clearRect(0, 0, w, h);
-
-  // Draw rotated image
-  ctx.save();
-  ctx.translate(w / 2, h / 2);
-  ctx.rotate((rotation * Math.PI) / 2);
-  const rotated = rotation % 2 !== 0;
-  const dw = rotated ? h : w;
-  const dh = rotated ? w : h;
-  ctx.drawImage(editorImg, -dw / 2, -dh / 2, dw, dh);
-  ctx.restore();
-
-  const { x, y, w: cw, h: ch } = crop;
-
-  // Dark overlay outside crop
-  ctx.fillStyle = 'rgba(0,0,0,0.6)';
-  ctx.fillRect(0, 0, w, y);
-  ctx.fillRect(0, y + ch, w, h - y - ch);
-  ctx.fillRect(0, y, x, ch);
-  ctx.fillRect(x + cw, y, w - x - cw, ch);
-
-  // Crop border
-  ctx.strokeStyle = 'rgba(255,255,255,0.9)';
-  ctx.lineWidth = 1.5;
-  ctx.strokeRect(x, y, cw, ch);
-
-  // Rule-of-thirds
-  ctx.strokeStyle = 'rgba(255,255,255,0.25)';
-  ctx.lineWidth = 0.75;
-  for (let i = 1; i < 3; i++) {
-    ctx.beginPath(); ctx.moveTo(x + cw*i/3, y); ctx.lineTo(x + cw*i/3, y+ch); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(x, y + ch*i/3); ctx.lineTo(x+cw, y + ch*i/3); ctx.stroke();
-  }
-
-  // Corner handles — L-shaped, gold
-  const hl = 18; // handle arm length
-  const hw = 3;  // handle arm width
-  ctx.fillStyle = '#c9a96e';
-  // Top-left
-  ctx.fillRect(x, y, hl, hw);
-  ctx.fillRect(x, y, hw, hl);
-  // Top-right
-  ctx.fillRect(x+cw-hl, y, hl, hw);
-  ctx.fillRect(x+cw-hw, y, hw, hl);
-  // Bottom-left
-  ctx.fillRect(x, y+ch-hw, hl, hw);
-  ctx.fillRect(x, y+ch-hl, hw, hl);
-  // Bottom-right
-  ctx.fillRect(x+cw-hl, y+ch-hw, hl, hw);
-  ctx.fillRect(x+cw-hw, y+ch-hl, hw, hl);
-
-  // Edge mid handles — small gold squares
-  const ms = 6;
-  ctx.fillStyle = 'rgba(201,169,110,0.85)';
-  ctx.fillRect(x+cw/2-ms/2, y-ms/2, ms, ms);           // top
-  ctx.fillRect(x+cw/2-ms/2, y+ch-ms/2, ms, ms);         // bottom
-  ctx.fillRect(x-ms/2, y+ch/2-ms/2, ms, ms);             // left
-  ctx.fillRect(x+cw-ms/2, y+ch/2-ms/2, ms, ms);          // right
-}
-
-// ── Hit testing ───────────────────────────────────────────────────────────────
-function getHitZone(px, py) {
-  const { x, y, w: cw, h: ch } = crop;
-  const hs = HANDLE_SIZE;
-  const near = (a, b) => Math.abs(a - b) < hs;
-
-  // Corners first (priority)
-  if (near(px, x)    && near(py, y))      return 'tl';
-  if (near(px, x+cw) && near(py, y))      return 'tr';
-  if (near(px, x)    && near(py, y+ch))   return 'bl';
-  if (near(px, x+cw) && near(py, y+ch))   return 'br';
-  // Edges
-  if (near(py, y)    && px > x && px < x+cw) return 't';
-  if (near(py, y+ch) && px > x && px < x+cw) return 'b';
-  if (near(px, x)    && py > y && py < y+ch) return 'l';
-  if (near(px, x+cw) && py > y && py < y+ch) return 'r';
-  // Inside = move
-  if (px > x && px < x+cw && py > y && py < y+ch) return 'move';
-  return null;
-}
-
-function getPos(e) {
-  const rect = editorCanvas.getBoundingClientRect();
-  const scaleX = editorCanvas.width / rect.width;
-  const scaleY = editorCanvas.height / rect.height;
-  const src = e.touches ? e.touches[0] : e;
-  return {
-    x: (src.clientX - rect.left) * scaleX,
-    y: (src.clientY - rect.top) * scaleY
-  };
-}
-
-function onPointerDown(e) {
-  e.preventDefault();
-  const pos = getPos(e);
-  dragMode = getHitZone(pos.x, pos.y);
-  if (!dragMode) return;
-  dragStart = pos;
-  cropAtDragStart = { ...crop };
-}
-
-function onPointerMove(e) {
-  if (!dragMode) return;
-  e.preventDefault();
-  const pos = getPos(e);
-  const dx = pos.x - dragStart.x;
-  const dy = pos.y - dragStart.y;
-  const c = { ...cropAtDragStart };
-
-  if (dragMode === 'move') {
-    crop.x = c.x + dx;
-    crop.y = c.y + dy;
+  if (rotated) {
+    const r = editorImgEl.getBoundingClientRect();
+    const natW = editorImg.width, natH = editorImg.height;
+    const scale = Math.min(r.width / natH, r.height / natW, 1);
+    editorImgEl.style.width  = natH * scale + 'px';
+    editorImgEl.style.height = natW * scale + 'px';
   } else {
-    if (dragMode.includes('l')) { crop.x = c.x + dx; crop.w = c.w - dx; }
-    if (dragMode.includes('r')) { crop.w = c.w + dx; }
-    if (dragMode.includes('t')) { crop.y = c.y + dy; crop.h = c.h - dy; }
-    if (dragMode.includes('b')) { crop.h = c.h + dy; }
+    editorImgEl.style.width  = '';
+    editorImgEl.style.height = '';
   }
-
-  clampCrop();
-  renderEditor();
 }
 
-function onPointerUp() { dragMode = null; }
+function buildOverlay() {
+  applyRotationToDisplay();
+  cropOverlay.innerHTML = '';
 
-// Update cursor on hover (desktop)
-editorCanvas.addEventListener('mousemove', (e) => {
-  if (dragMode) return;
-  const pos = getPos(e);
-  const zone = getHitZone(pos.x, pos.y);
-  const cursors = { tl:'nw-resize', tr:'ne-resize', bl:'sw-resize', br:'se-resize',
-                    t:'n-resize', b:'s-resize', l:'w-resize', r:'e-resize', move:'move' };
-  editorCanvas.style.cursor = cursors[zone] || 'default';
-});
+  // 4 dark masks
+  for (let i = 0; i < 4; i++) {
+    const m = document.createElement('div');
+    m.className = 'crop-mask';
+    m.id = 'mask-' + i;
+    cropOverlay.appendChild(m);
+  }
 
-editorCanvas.addEventListener('mousedown', onPointerDown);
-editorCanvas.addEventListener('mousemove', onPointerMove);
-editorCanvas.addEventListener('mouseup', onPointerUp);
+  // Crop box
+  const box = document.createElement('div');
+  box.id = 'crop-box';
 
-editorCanvas.addEventListener('touchstart', onPointerDown, { passive: false });
-editorCanvas.addEventListener('touchmove', onPointerMove, { passive: false });
-editorCanvas.addEventListener('touchend', onPointerUp);
+  // 4 corners + 4 edges
+  [['tl','corner'],['tr','corner'],['bl','corner'],['br','corner'],
+   ['tm','edge'],['bm','edge'],['lm','edge'],['rm','edge']].forEach(([cls]) => {
+    const h = document.createElement('div');
+    h.className = 'crop-handle ' + cls;
+    h.dataset.handle = cls;
+    box.appendChild(h);
+    h.addEventListener('mousedown',  (e) => { e.stopPropagation(); startDrag(e, cls); });
+    h.addEventListener('touchstart', (e) => { e.stopPropagation(); e.preventDefault(); startDrag(e, cls); }, { passive: false });
+  });
+
+  cropOverlay.appendChild(box);
+
+  // Move via drag on crop box itself
+  box.addEventListener('mousedown',  (e) => startDrag(e, 'move'));
+  box.addEventListener('touchstart', (e) => { e.preventDefault(); startDrag(e, 'move'); }, { passive: false });
+
+  // Global move/up
+  cropOverlay.addEventListener('mousedown',  (e) => { if (e.target === cropOverlay) startDrag(e, 'move'); });
+
+  updateOverlay();
+}
+
+function getImgRect() {
+  return editorImgEl.getBoundingClientRect();
+}
+
+function updateOverlay() {
+  const ir = getImgRect();
+  const wr = editorWrap.getBoundingClientRect();
+
+  // img position relative to overlay (which covers the whole wrap)
+  const ix = ir.left - wr.left;
+  const iy = ir.top  - wr.top;
+  const iw = ir.width;
+  const ih = ir.height;
+
+  // Crop box in px
+  const bx = ix + cropPct.x * iw;
+  const by = iy + cropPct.y * ih;
+  const bw = cropPct.w * iw;
+  const bh = cropPct.h * ih;
+
+  const box = document.getElementById('crop-box');
+  if (!box) return;
+  box.style.left   = bx + 'px';
+  box.style.top    = by + 'px';
+  box.style.width  = bw + 'px';
+  box.style.height = bh + 'px';
+
+  // Masks
+  const m = (i) => document.getElementById('mask-' + i);
+  // top
+  m(0).style.cssText = `left:${ix}px;top:${iy}px;width:${iw}px;height:${cropPct.y*ih}px;`;
+  // bottom
+  m(1).style.cssText = `left:${ix}px;top:${by+bh}px;width:${iw}px;height:${(1-cropPct.y-cropPct.h)*ih}px;`;
+  // left
+  m(2).style.cssText = `left:${ix}px;top:${by}px;width:${cropPct.x*iw}px;height:${bh}px;`;
+  // right
+  m(3).style.cssText = `left:${bx+bw}px;top:${by}px;width:${(1-cropPct.x-cropPct.w)*iw}px;height:${bh}px;`;
+}
+
+function getTouchOrMouse(e) {
+  return e.touches ? e.touches[0] : e;
+}
+
+function startDrag(e, mode) {
+  e.preventDefault();
+  const p = getTouchOrMouse(e);
+  activeDrag = { mode, startX: p.clientX, startY: p.clientY, startCrop: { ...cropPct } };
+}
+
+function onDragMove(e) {
+  if (!activeDrag) return;
+  e.preventDefault();
+  const p   = getTouchOrMouse(e);
+  const ir  = getImgRect();
+  const dx  = (p.clientX - activeDrag.startX) / ir.width;
+  const dy  = (p.clientY - activeDrag.startY) / ir.height;
+  const sc  = activeDrag.startCrop;
+  const MIN = 0.05;
+
+  let { x, y, w, h } = { ...sc };
+
+  const mode = activeDrag.mode;
+  if (mode === 'move') {
+    x = Math.max(0, Math.min(1 - w, sc.x + dx));
+    y = Math.max(0, Math.min(1 - h, sc.y + dy));
+  } else {
+    if (mode === 'tl' || mode === 'lm' || mode === 'bl') {
+      const nx = Math.max(0, Math.min(sc.x + sc.w - MIN, sc.x + dx));
+      w = sc.w + (sc.x - nx); x = nx;
+    }
+    if (mode === 'tr' || mode === 'rm' || mode === 'br') {
+      w = Math.max(MIN, Math.min(1 - sc.x, sc.w + dx));
+    }
+    if (mode === 'tl' || mode === 'tm' || mode === 'tr') {
+      const ny = Math.max(0, Math.min(sc.y + sc.h - MIN, sc.y + dy));
+      h = sc.h + (sc.y - ny); y = ny;
+    }
+    if (mode === 'bl' || mode === 'bm' || mode === 'br') {
+      h = Math.max(MIN, Math.min(1 - sc.y, sc.h + dy));
+    }
+  }
+
+  cropPct = { x, y, w, h };
+  updateOverlay();
+}
+
+function onDragEnd() { activeDrag = null; }
+
+window.addEventListener('mousemove',  onDragMove);
+window.addEventListener('mouseup',    onDragEnd);
+window.addEventListener('touchmove',  onDragMove, { passive: false });
+window.addEventListener('touchend',   onDragEnd);
+
+window.addEventListener('resize', () => { if (editorModal.classList.contains('open')) updateOverlay(); });
 
 // Rotate buttons
 document.getElementById('tool-rotate-ccw').addEventListener('click', () => {
   rotation = (rotation + 3) % 4;
-  renderEditor(); resetCropToFull();
+  cropPct = { x: 0, y: 0, w: 1, h: 1 };
+  buildOverlay();
 });
 document.getElementById('tool-rotate-cw').addEventListener('click', () => {
   rotation = (rotation + 1) % 4;
-  renderEditor(); resetCropToFull();
+  cropPct = { x: 0, y: 0, w: 1, h: 1 };
+  buildOverlay();
 });
 document.getElementById('tool-reset').addEventListener('click', () => {
   rotation = 0;
-  renderEditor(); resetCropToFull();
+  cropPct = { x: 0, y: 0, w: 1, h: 1 };
+  buildOverlay();
 });
 
 document.getElementById('editor-cancel').addEventListener('click', () => {
   editorModal.classList.remove('open');
 });
 
-// Done — apply rotation + crop, send to OCR
+// Done — apply rotation + crop via canvas, send to OCR
 document.getElementById('editor-done').addEventListener('click', () => {
   const finalCanvas = document.createElement('canvas');
   const fctx = finalCanvas.getContext('2d');
 
-  const rotated = rotation % 2 !== 0;
   const srcW = editorImg.width;
   const srcH = editorImg.height;
+  const rotated = rotation % 2 !== 0;
   const fullW = rotated ? srcH : srcW;
   const fullH = rotated ? srcW : srcH;
 
-  const { w: canvasW, h: canvasH } = getCanvasSize();
-  const scaleX = fullW / canvasW;
-  const scaleY = fullH / canvasH;
+  // Full rotated image first
+  const tmpCanvas = document.createElement('canvas');
+  tmpCanvas.width  = fullW;
+  tmpCanvas.height = fullH;
+  const tctx = tmpCanvas.getContext('2d');
+  tctx.save();
+  tctx.translate(fullW / 2, fullH / 2);
+  tctx.rotate((rotation * Math.PI) / 2);
+  tctx.drawImage(editorImg, -srcW / 2, -srcH / 2, srcW, srcH);
+  tctx.restore();
 
-  const cx = crop.x * scaleX;
-  const cy = crop.y * scaleY;
-  const cw = crop.w * scaleX;
-  const ch = crop.h * scaleY;
+  // Apply crop
+  const cx = Math.round(cropPct.x * fullW);
+  const cy = Math.round(cropPct.y * fullH);
+  const cw = Math.round(cropPct.w * fullW);
+  const ch = Math.round(cropPct.h * fullH);
 
-  finalCanvas.width = Math.round(cw);
-  finalCanvas.height = Math.round(ch);
-
-  fctx.save();
-  fctx.translate(-cx, -cy);
-  fctx.translate(fullW / 2, fullH / 2);
-  fctx.rotate((rotation * Math.PI) / 2);
-  fctx.drawImage(editorImg, -srcW / 2, -srcH / 2, srcW, srcH);
-  fctx.restore();
+  finalCanvas.width  = cw;
+  finalCanvas.height = ch;
+  fctx.drawImage(tmpCanvas, cx, cy, cw, ch, 0, 0, cw, ch);
 
   const dataUrl = finalCanvas.toDataURL('image/jpeg', 0.95);
   previewImg.src = dataUrl;
@@ -1459,14 +1529,10 @@ document.getElementById('editor-done').addEventListener('click', () => {
   editorModal.classList.remove('open');
 
   finalCanvas.toBlob((blob) => {
-    // Manually set type so getMediaType works correctly
     const typedBlob = new Blob([blob], { type: 'image/jpeg' });
     runOCR(typedBlob);
   }, 'image/jpeg', 0.95);
 });
-
-
-
 
 // ─── OCR via Claude Vision ────────────────────────────────────────────────────
 async function runOCR(file) {
@@ -1536,8 +1602,26 @@ async function runOCR(file) {
 function fileToBase64(file) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
-    reader.onload = () => resolve(reader.result.split(',')[1]);
     reader.onerror = reject;
+    reader.onload = (e) => {
+      // Compress large images before sending — phone photos can be 8–15MB
+      // Cap at 1600px on longest side, 0.88 quality — plenty for OCR
+      const img = new Image();
+      img.onload = () => {
+        const MAX = 1600;
+        let w = img.width, h = img.height;
+        if (w > MAX || h > MAX) {
+          if (w > h) { h = Math.round(h * MAX / w); w = MAX; }
+          else       { w = Math.round(w * MAX / h); h = MAX; }
+        }
+        const c = document.createElement('canvas');
+        c.width = w; c.height = h;
+        c.getContext('2d').drawImage(img, 0, 0, w, h);
+        resolve(c.toDataURL('image/jpeg', 0.88).split(',')[1]);
+      };
+      img.onerror = reject;
+      img.src = e.target.result;
+    };
     reader.readAsDataURL(file);
   });
 }
@@ -1570,38 +1654,6 @@ function updateWordCount() {
 extractedText.addEventListener('input', updateWordCount);
 
 // ─── Voice loading ────────────────────────────────────────────────────────────
-function loadVoices() {
-  voices = synth.getVoices();
-
-  // Filter for English voices, prefer natural/neural ones
-  const engVoices = voices.filter(v => v.lang.startsWith('en'));
-  const preferred = engVoices.filter(v =>
-    /natural|neural|premium|enhanced|samantha|karen|daniel|moira|fiona|rishi|kate|google/i.test(v.name)
-  );
-  const displayVoices = preferred.length > 0 ? preferred : engVoices.slice(0, 12);
-
-  voiceSelect.innerHTML = '';
-  displayVoices.forEach((v, i) => {
-    const opt = document.createElement('option');
-    opt.value = i;
-    opt.textContent = v.name.replace(/\(.*?\)/g, '').trim();
-    opt.dataset.voice = v.name;
-    voiceSelect.appendChild(opt);
-  });
-
-  // Try to pre-select a good default
-  const goodDefaults = ['Samantha', 'Karen', 'Daniel', 'Google US English', 'Google UK', 'Moira'];
-  for (const name of goodDefaults) {
-    const idx = displayVoices.findIndex(v => v.name.includes(name));
-    if (idx !== -1) { voiceSelect.value = idx; break; }
-  }
-}
-
-if (synth.onvoiceschanged !== undefined) {
-  synth.onvoiceschanged = loadVoices;
-}
-loadVoices();
-
 rateSlider.addEventListener('input', () => {
   rateVal.textContent = parseFloat(rateSlider.value).toFixed(2).replace(/\.?0+$/, '') + '×';
 });
@@ -1610,157 +1662,124 @@ pitchSlider.addEventListener('input', () => {
   pitchVal.textContent = parseFloat(pitchSlider.value).toFixed(2).replace(/\.?0+$/, '');
 });
 
-// ─── Text preprocessing for natural narration ─────────────────────────────────
+// ─── Text preprocessing ────────────────────────────────────────────────────────
 function prepareTextForSpeech(text) {
-  // ── Step 1: Fix drop caps ──────────────────────────────────────────────────
-  // Claude OCR sometimes returns a drop cap as an isolated capital letter on
-  // its own line, separated from the rest of the word.
-  // e.g.  "W\nhy isn't this working?" → "Why isn't this working?"
-  // e.g.  "T\nt was the first warm day" → "It was the first warm day"  (drop cap 'I' + 't')
-  // Pattern: single capital letter at start of text or after a blank line,
-  // followed by a newline, followed by lowercase letters continuing the word.
-  text = text.replace(/(^|\n\n)([A-Z])\n([a-z])/g, (match, before, cap, rest) => {
-    return before + cap + rest;
+  // Fix drop caps — isolated capital letter followed by rest of word on next line
+  // Handles: "W\nhy", "I\nt was", "T\nhe" etc.
+  text = text.replace(/(^|\n\n)([A-Z])\n([a-zA-Z])/g, (m, before, cap, rest) => before + cap + rest);
+  text = text.replace(/^([A-Z])\n([a-zA-Z])/m, '$1$2');
+  // Also catch drop cap where OCR puts just the big letter alone as a paragraph
+  text = text.replace(/\n([A-Z])\n([a-z])/g, '\n$1$2');
+
+  // Year pronunciation
+  text = text.replace(/\b(1[0-9])([0-9]{2})\b/g, (m, cent, rest) => {
+    const c = parseInt(cent);
+    const r = parseInt(rest);
+    const n = {10:'ten',11:'eleven',12:'twelve',13:'thirteen',14:'fourteen',
+               15:'fifteen',16:'sixteen',17:'seventeen',18:'eighteen',19:'nineteen'};
+    const p = n[c] || m;
+    if (r === 0) return p + ' hundred';
+    if (r < 10)  return p + ' oh ' + r;
+    return p + ' ' + r;
   });
-
-  // Also handle: isolated capital on its own paragraph that is actually the
-  // first letter of the next word (e.g.  "W\nhy" at very start)
-  text = text.replace(/^([A-Z])\n([a-z])/m, '$1$2');
-
-  // ── Step 2: Year pronunciation ────────────────────────────────────────────
-  // Convert 4-digit years to natural spoken form:
-  // 1800–1899 → "eighteen XX"
-  // 1900–1999 → "nineteen XX"
-  // 2000–2009 → "two thousand and X"  (these ARE spoken as two-thousand)
-  // 2010–2099 → "twenty XX"
-  // 1000–1799 → leave as-is (rare in prose; TTS handles these okay)
-  text = text.replace(/\b(1[0-9])([0-9]{2})\b/g, (match, century, rest) => {
-    const c = parseInt(century, 10);
-    const r = parseInt(rest, 10);
-    const centuries = {
-      10:'ten', 11:'eleven', 12:'twelve', 13:'thirteen', 14:'fourteen',
-      15:'fifteen', 16:'sixteen', 17:'seventeen', 18:'eighteen', 19:'nineteen'
-    };
-    const prefix = centuries[c] || match;
-    if (r === 0) return prefix + ' hundred';
-    if (r < 10)  return prefix + ' oh ' + r;
-    return prefix + ' ' + r;
-  });
-
-  // 2010–2099
-  text = text.replace(/\b(20)([1-9][0-9])\b/g, (match, _, rest) => {
-    return 'twenty ' + parseInt(rest, 10);
-  });
-
-  // 2001–2009
-  text = text.replace(/\b(200)([1-9])\b/g, (match, _, d) => {
-    const words = ['','one','two','three','four','five','six','seven','eight','nine'];
-    return 'two thousand and ' + words[parseInt(d, 10)];
-  });
-
-  // 2000
+  text = text.replace(/\b20([1-9][0-9])\b/g, (m,r) => 'twenty ' + parseInt(r));
+  text = text.replace(/\b200([1-9])\b/g, (m,d) => 'two thousand and ' + ['','one','two','three','four','five','six','seven','eight','nine'][+d]);
   text = text.replace(/\b2000\b/g, 'two thousand');
 
   return text
-    // ── Step 3: Abbreviations ──────────────────────────────────────────────
-    .replace(/\bDr\./g, 'Doctor')
-    .replace(/\bMr\./g, 'Mister')
-    .replace(/\bMrs\./g, 'Missus')
-    .replace(/\bMs\./g, 'Miss')
-    .replace(/\bSt\./g, 'Saint')
-    .replace(/\betc\./gi, 'et cetera,')
-    .replace(/\be\.g\./gi, 'for example,')
-    .replace(/\bi\.e\./gi, 'that is,')
-    // ── Step 4: Natural pauses ─────────────────────────────────────────────
-    .replace(/([;:])\s/g, '$1  ')
-    .replace(/\n\n/g, '. \n\n')
-    // ── Step 5: Clean up ───────────────────────────────────────────────────
-    .replace(/\s+/g, ' ')
+    .replace(/\bDr\./g,'Doctor').replace(/\bMr\./g,'Mister').replace(/\bMrs\./g,'Missus')
+    .replace(/\bMs\./g,'Miss').replace(/\bSt\./g,'Saint')
+    .replace(/\betc\./gi,'et cetera,').replace(/\be\.g\./gi,'for example,').replace(/\bi\.e\./gi,'that is,')
+    .replace(/([;:])\s/g,'$1  ')
+    .replace(/\n\n+/g,'\n\n')
     .trim();
 }
 
-// ─── TTS ──────────────────────────────────────────────────────────────────────
+// ─── ElevenLabs TTS ───────────────────────────────────────────────────────────
+let audioEl = null;
+let audioUrl = null;
+
 convertBtn.addEventListener('click', startSpeech);
 
-function startSpeech() {
+async function startSpeech() {
   const text = extractedText.value.trim();
   if (!text) return;
 
-  synth.cancel();
-  clearInterval(progressInterval);
+  // Stop any current playback
+  if (audioEl) { audioEl.pause(); audioEl = null; }
+  if (audioUrl) { URL.revokeObjectURL(audioUrl); audioUrl = null; }
+
+  convertBtn.disabled = true;
+  convertBtn.textContent = 'Generating audio…';
 
   const prepared = prepareTextForSpeech(text);
-  utterance = new SpeechSynthesisUtterance(prepared);
+  const voiceId   = voiceSelect.value;
+  const speed     = parseFloat(rateSlider.value);
+  const stability = parseFloat(pitchSlider.value);
 
-  const selectedOpt = voiceSelect.options[voiceSelect.value];
-  if (selectedOpt) {
-    const voiceName = selectedOpt.dataset.voice;
-    const voice = voices.find(v => v.name === voiceName);
-    if (voice) utterance.voice = voice;
-  }
+  try {
+    const resp = await fetch('/api/tts', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text: prepared, voiceId, speed, stability })
+    });
 
-  utterance.rate = parseFloat(rateSlider.value);
-  utterance.pitch = parseFloat(pitchSlider.value);
-  utterance.volume = 1;
-
-  totalChars = prepared.length;
-  const wordsPerMin = 150 * utterance.rate;
-  const words = text.split(/\s+/).length;
-  estimatedDuration = (words / wordsPerMin) * 60;
-
-  // Player setup
-  showLabel('step4-label');
-  showEl(audioPlayer);
-
-  const words2 = text.split(/\s+/).length;
-  document.getElementById('player-title').textContent =
-    text.substring(0, 50) + (text.length > 50 ? '…' : '');
-  document.getElementById('player-meta').textContent =
-    words2 + ' words · ~' + Math.ceil(words2 / 150) + ' min read';
-
-  timeTotal.textContent = fmtTime(estimatedDuration);
-  timeCurrent.textContent = '0:00';
-  trackFill.style.width = '0%';
-
-  utterance.onstart = () => {
-    setPlaying(true);
-    startTime = Date.now();
-    progressInterval = setInterval(updateProgress, 500);
-  };
-
-  utterance.onboundary = (e) => {
-    charIndex = e.charIndex;
-  };
-
-  utterance.onend = () => {
-    setPlaying(false);
-    clearInterval(progressInterval);
-    trackFill.style.width = '100%';
-    timeCurrent.textContent = fmtTime(estimatedDuration);
-    showEl(downloadStrip);
-    showToast('Audio finished · Recording saved');
-  };
-
-  utterance.onerror = (e) => {
-    if (e.error !== 'interrupted' && e.error !== 'canceled') {
-      setPlaying(false);
-      clearInterval(progressInterval);
-      showStatus('Audio error: ' + e.error, 'error');
+    if (!resp.ok) {
+      const e = await resp.json().catch(() => ({}));
+      throw new Error(e.error || 'TTS generation failed');
     }
-  };
 
-  synth.speak(utterance);
-  isPlaying = true;
-  isPaused = false;
+    const blob = await resp.blob();
+    audioUrl = URL.createObjectURL(blob);
+    audioEl  = new Audio(audioUrl);
+
+    // Player setup
+    const words = text.split(/\s+/).length;
+    showLabel('step4-label');
+    showEl(audioPlayer);
+    document.getElementById('player-title').textContent = text.substring(0, 50) + (text.length > 50 ? '…' : '');
+    document.getElementById('player-meta').textContent  = words + ' words · ~' + Math.ceil(words / 150) + ' min read';
+    trackFill.style.width = '0%';
+    timeCurrent.textContent = '0:00';
+
+    audioEl.addEventListener('loadedmetadata', () => {
+      timeTotal.textContent = fmtTime(audioEl.duration);
+      estimatedDuration = audioEl.duration;
+    });
+
+    audioEl.addEventListener('timeupdate', () => {
+      if (!audioEl.duration) return;
+      const pct = (audioEl.currentTime / audioEl.duration) * 100;
+      trackFill.style.width = pct + '%';
+      timeCurrent.textContent = fmtTime(audioEl.currentTime);
+    });
+
+    audioEl.addEventListener('ended', () => {
+      setPlaying(false);
+      trackFill.style.width = '100%';
+      showEl(downloadStrip);
+      showToast('Audio ready · Tap save to download');
+    });
+
+    audioEl.addEventListener('error', () => {
+      setPlaying(false);
+      showStatus('Playback error', 'error');
+    });
+
+    audioEl.play();
+    setPlaying(true);
+    isPlaying = true;
+    isPaused  = false;
+
+  } catch (err) {
+    showStatus('Audio error: ' + err.message, 'error');
+  } finally {
+    convertBtn.disabled = false;
+    convertBtn.innerHTML = '<svg viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg> Convert to Audio';
+  }
 }
 
-function updateProgress() {
-  if (!isPlaying || isPaused) return;
-  const elapsed = (Date.now() - startTime) / 1000;
-  const pct = Math.min((elapsed / estimatedDuration) * 100, 99);
-  trackFill.style.width = pct + '%';
-  timeCurrent.textContent = fmtTime(elapsed);
-}
+function updateProgress() {}
 
 function setPlaying(val) {
   isPlaying = val;
@@ -1773,84 +1792,54 @@ function setPlaying(val) {
 
 // Controls
 playPauseBtn.addEventListener('click', () => {
-  if (!utterance) return;
-  if (isPlaying && !isPaused) {
-    synth.pause();
+  if (!audioEl) { startSpeech(); return; }
+  if (isPlaying) {
+    audioEl.pause();
     isPaused = true;
     setPlaying(false);
-    clearInterval(progressInterval);
-  } else if (isPaused) {
-    synth.resume();
+  } else {
+    audioEl.play();
     isPaused = false;
     setPlaying(true);
-    startTime = Date.now() - (parseFloat(trackFill.style.width) / 100 * estimatedDuration * 1000);
-    progressInterval = setInterval(updateProgress, 500);
-  } else {
-    startSpeech();
   }
 });
 
 document.getElementById('rewind-btn').addEventListener('click', () => {
-  startSpeech(); // Restart — true seek isn't available in Web Speech API
-  showToast('Restarted from beginning');
+  if (audioEl) { audioEl.currentTime = Math.max(0, audioEl.currentTime - 10); }
 });
 
 document.getElementById('forward-btn').addEventListener('click', () => {
-  synth.cancel();
-  setPlaying(false);
-  showToast('Skipped to end');
+  if (audioEl) { audioEl.currentTime = Math.min(audioEl.duration, audioEl.currentTime + 10); }
 });
 
 document.getElementById('restart-btn').addEventListener('click', () => {
-  startSpeech();
+  if (audioEl) { audioEl.currentTime = 0; audioEl.play(); setPlaying(true); }
 });
 
 speedBtn.addEventListener('click', () => {
   speedIdx = (speedIdx + 1) % speedCycles.length;
   const s = speedCycles[speedIdx];
   speedBtn.textContent = s + '×';
-  if (utterance && isPlaying) {
-    rateSlider.value = 0.88 * s;
-    synth.cancel();
-    startSpeech();
-  }
+  if (audioEl) audioEl.playbackRate = s;
 });
 
-// ─── Download (recorded via MediaRecorder + AudioContext) ─────────────────────
+// Progress bar seek
+document.getElementById('progress-track').addEventListener('click', (e) => {
+  if (!audioEl || !audioEl.duration) return;
+  const rect = e.currentTarget.getBoundingClientRect();
+  const pct  = (e.clientX - rect.left) / rect.width;
+  audioEl.currentTime = pct * audioEl.duration;
+});
+
+// Download
 downloadStrip.addEventListener('click', () => {
-  showToast('Re-playing to capture audio…');
-  captureAndDownload();
+  if (!audioUrl) return;
+  const a = document.createElement('a');
+  a.href = audioUrl;
+  a.download = 'listenify-audio.mp3';
+  a.click();
+  showToast('Audio downloaded!');
 });
-
-function captureAndDownload() {
-  const text = extractedText.value.trim();
-  if (!text) return;
-
-  const dest = new AudioContext();
-  const chunks = [];
-
-  const stream = dest.createMediaStreamDestination();
-  const recorder = new MediaRecorder(stream.stream);
-  recorder.ondataavailable = e => chunks.push(e.data);
-  recorder.onstop = () => {
-    const blob = new Blob(chunks, { type: 'audio/webm' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'listenify-recording.webm';
-    a.click();
-    URL.revokeObjectURL(url);
-    showToast('Audio file downloaded!');
-  };
-
-  recorder.start();
-
-  const u = new SpeechSynthesisUtterance(prepareTextForSpeech(text));
-  if (utterance) { u.voice = utterance.voice; u.rate = utterance.rate; u.pitch = utterance.pitch; }
-  u.onend = () => { recorder.stop(); dest.close(); };
-  u.onerror = () => { recorder.stop(); dest.close(); };
-  synth.speak(u);
-}
 
 // ─── PWA Install ──────────────────────────────────────────────────────────────
 const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent) && !window.MSStream;
@@ -1861,6 +1850,7 @@ if (isIOS && !isStandalone) {
 }
 
 window.addEventListener('beforeinstallprompt', (e) => {
+
   e.preventDefault();
   deferredInstallPrompt = e;
   setTimeout(() => installBanner.classList.add('show'), 3000);

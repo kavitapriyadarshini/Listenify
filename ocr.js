@@ -1,3 +1,7 @@
+export const config = {
+  api: { bodyParser: { sizeLimit: '10mb' } }
+};
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
@@ -37,7 +41,8 @@ export default async function handler(req, res) {
               text: `Extract ALL the text from this image exactly as it appears. 
 Rules:
 - Preserve paragraph breaks with a blank line between paragraphs
-- Join hyphenated line-breaks (e.g. "non-\nconscious" → "nonconscious")  
+- Join hyphenated line-breaks (e.g. "non-\nconscious" → "nonconscious")
+- IMPORTANT: If the first letter of a chapter or paragraph is printed in a large decorative/drop-cap style, you MUST include it as part of the word. For example if a large "W" starts the word "Why", output "Why" not just "hy". If a large "I" starts "It was", output "It was" not "t was". Never omit the enlarged first character.
 - If there are two columns, read the left column fully first, then the right column
 - Ignore page numbers, headers, footers, and watermarks
 - Do NOT add any commentary, just return the raw extracted text`
