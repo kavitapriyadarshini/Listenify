@@ -1204,20 +1204,29 @@ const editorCanvas = document.getElementById('editor-canvas');
 const ctx = editorCanvas.getContext('2d');
 
 let editorImg = new Image();
-let rotation = 0; // in 90-deg steps (0,1,2,3)
-let cropRect = null;   // {x,y,w,h} in canvas coords
-let isDragging = false;
-let dragStart = null;
+let rotation = 0;
 let originalSrc = null;
+
+// Crop state — always covers full image initially, user drags handles to adjust
+let crop = { x: 0, y: 0, w: 0, h: 0 }; // in canvas display coords
+
+// Drag state
+const HANDLE_SIZE = 22; // touch-friendly handle hit area
+let dragMode = null; // 'tl','tr','bl','br','t','b','l','r','move', null
+let dragStart = null;
+let cropAtDragStart = null;
 
 function openEditor(src) {
   originalSrc = src;
   rotation = 0;
-  cropRect = null;
   editorImg = new Image();
   editorImg.onload = () => {
     editorModal.classList.add('open');
-    renderEditor();
+    // Small delay so modal is visible and has dimensions
+    setTimeout(() => {
+      renderEditor();
+      resetCropToFull();
+    }, 60);
   };
   editorImg.src = src;
 }
@@ -1226,21 +1235,32 @@ function getCanvasSize() {
   const wrap = document.querySelector('.editor-canvas-wrap');
   const maxW = wrap.clientWidth - 32;
   const maxH = wrap.clientHeight - 32;
-
-  // Apply rotation to determine natural w/h
   const rotated = rotation % 2 !== 0;
   const imgW = rotated ? editorImg.height : editorImg.width;
   const imgH = rotated ? editorImg.width : editorImg.height;
-
   const scale = Math.min(maxW / imgW, maxH / imgH, 1);
-  return { w: Math.round(imgW * scale), h: Math.round(imgH * scale), scale };
+  return { w: Math.round(imgW * scale), h: Math.round(imgH * scale) };
+}
+
+function resetCropToFull() {
+  const { w, h } = getCanvasSize();
+  crop = { x: 0, y: 0, w, h };
+  renderEditor();
+}
+
+function clampCrop() {
+  const { w, h } = getCanvasSize();
+  const minSize = 40;
+  crop.w = Math.max(minSize, Math.min(crop.w, w - crop.x));
+  crop.h = Math.max(minSize, Math.min(crop.h, h - crop.y));
+  crop.x = Math.max(0, Math.min(crop.x, w - crop.w));
+  crop.y = Math.max(0, Math.min(crop.y, h - crop.h));
 }
 
 function renderEditor() {
   const { w, h } = getCanvasSize();
   editorCanvas.width = w;
   editorCanvas.height = h;
-
   ctx.clearRect(0, 0, w, h);
 
   // Draw rotated image
@@ -1253,115 +1273,156 @@ function renderEditor() {
   ctx.drawImage(editorImg, -dw / 2, -dh / 2, dw, dh);
   ctx.restore();
 
-  // Dim outside crop rect
-  if (cropRect) {
-    const { x, y, w: cw, h: ch } = cropRect;
-    ctx.fillStyle = 'rgba(0,0,0,0.55)';
-    ctx.fillRect(0, 0, w, y);
-    ctx.fillRect(0, y + ch, w, h - y - ch);
-    ctx.fillRect(0, y, x, ch);
-    ctx.fillRect(x + cw, y, w - x - cw, ch);
+  const { x, y, w: cw, h: ch } = crop;
 
-    // Crop border
-    ctx.strokeStyle = 'rgba(201,169,110,0.9)';
-    ctx.lineWidth = 1.5;
-    ctx.setLineDash([]);
-    ctx.strokeRect(x, y, cw, ch);
+  // Dark overlay outside crop
+  ctx.fillStyle = 'rgba(0,0,0,0.6)';
+  ctx.fillRect(0, 0, w, y);
+  ctx.fillRect(0, y + ch, w, h - y - ch);
+  ctx.fillRect(0, y, x, ch);
+  ctx.fillRect(x + cw, y, w - x - cw, ch);
 
-    // Corner handles
-    const hs = 10;
-    ctx.fillStyle = 'rgba(201,169,110,1)';
-    [[x, y],[x+cw-hs, y],[x, y+ch-hs],[x+cw-hs, y+ch-hs]].forEach(([hx,hy]) => {
-      ctx.fillRect(hx, hy, hs, hs);
-    });
+  // Crop border
+  ctx.strokeStyle = 'rgba(255,255,255,0.9)';
+  ctx.lineWidth = 1.5;
+  ctx.strokeRect(x, y, cw, ch);
 
-    // Rule-of-thirds grid
-    ctx.strokeStyle = 'rgba(201,169,110,0.25)';
-    ctx.lineWidth = 0.5;
-    for (let i = 1; i < 3; i++) {
-      ctx.beginPath(); ctx.moveTo(x + cw * i/3, y); ctx.lineTo(x + cw * i/3, y + ch); ctx.stroke();
-      ctx.beginPath(); ctx.moveTo(x, y + ch * i/3); ctx.lineTo(x + cw, y + ch * i/3); ctx.stroke();
-    }
+  // Rule-of-thirds
+  ctx.strokeStyle = 'rgba(255,255,255,0.25)';
+  ctx.lineWidth = 0.75;
+  for (let i = 1; i < 3; i++) {
+    ctx.beginPath(); ctx.moveTo(x + cw*i/3, y); ctx.lineTo(x + cw*i/3, y+ch); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(x, y + ch*i/3); ctx.lineTo(x+cw, y + ch*i/3); ctx.stroke();
   }
+
+  // Corner handles — L-shaped, gold
+  const hl = 18; // handle arm length
+  const hw = 3;  // handle arm width
+  ctx.fillStyle = '#c9a96e';
+  // Top-left
+  ctx.fillRect(x, y, hl, hw);
+  ctx.fillRect(x, y, hw, hl);
+  // Top-right
+  ctx.fillRect(x+cw-hl, y, hl, hw);
+  ctx.fillRect(x+cw-hw, y, hw, hl);
+  // Bottom-left
+  ctx.fillRect(x, y+ch-hw, hl, hw);
+  ctx.fillRect(x, y+ch-hl, hw, hl);
+  // Bottom-right
+  ctx.fillRect(x+cw-hl, y+ch-hw, hl, hw);
+  ctx.fillRect(x+cw-hw, y+ch-hl, hw, hl);
+
+  // Edge mid handles — small gold squares
+  const ms = 6;
+  ctx.fillStyle = 'rgba(201,169,110,0.85)';
+  ctx.fillRect(x+cw/2-ms/2, y-ms/2, ms, ms);           // top
+  ctx.fillRect(x+cw/2-ms/2, y+ch-ms/2, ms, ms);         // bottom
+  ctx.fillRect(x-ms/2, y+ch/2-ms/2, ms, ms);             // left
+  ctx.fillRect(x+cw-ms/2, y+ch/2-ms/2, ms, ms);          // right
 }
 
-// Mouse / touch helpers
+// ── Hit testing ───────────────────────────────────────────────────────────────
+function getHitZone(px, py) {
+  const { x, y, w: cw, h: ch } = crop;
+  const hs = HANDLE_SIZE;
+  const near = (a, b) => Math.abs(a - b) < hs;
+
+  // Corners first (priority)
+  if (near(px, x)    && near(py, y))      return 'tl';
+  if (near(px, x+cw) && near(py, y))      return 'tr';
+  if (near(px, x)    && near(py, y+ch))   return 'bl';
+  if (near(px, x+cw) && near(py, y+ch))   return 'br';
+  // Edges
+  if (near(py, y)    && px > x && px < x+cw) return 't';
+  if (near(py, y+ch) && px > x && px < x+cw) return 'b';
+  if (near(px, x)    && py > y && py < y+ch) return 'l';
+  if (near(px, x+cw) && py > y && py < y+ch) return 'r';
+  // Inside = move
+  if (px > x && px < x+cw && py > y && py < y+ch) return 'move';
+  return null;
+}
+
 function getPos(e) {
   const rect = editorCanvas.getBoundingClientRect();
   const scaleX = editorCanvas.width / rect.width;
   const scaleY = editorCanvas.height / rect.height;
-  if (e.touches) {
-    return {
-      x: (e.touches[0].clientX - rect.left) * scaleX,
-      y: (e.touches[0].clientY - rect.top) * scaleY
-    };
-  }
+  const src = e.touches ? e.touches[0] : e;
   return {
-    x: (e.clientX - rect.left) * scaleX,
-    y: (e.clientY - rect.top) * scaleY
+    x: (src.clientX - rect.left) * scaleX,
+    y: (src.clientY - rect.top) * scaleY
   };
 }
 
-editorCanvas.addEventListener('mousedown', startCrop);
-editorCanvas.addEventListener('touchstart', (e) => { e.preventDefault(); startCrop(e); }, { passive: false });
-
-editorCanvas.addEventListener('mousemove', moveCrop);
-editorCanvas.addEventListener('touchmove', (e) => { e.preventDefault(); moveCrop(e); }, { passive: false });
-
-editorCanvas.addEventListener('mouseup', endCrop);
-editorCanvas.addEventListener('touchend', endCrop);
-
-function startCrop(e) {
-  isDragging = true;
-  dragStart = getPos(e);
-  cropRect = null;
+function onPointerDown(e) {
+  e.preventDefault();
+  const pos = getPos(e);
+  dragMode = getHitZone(pos.x, pos.y);
+  if (!dragMode) return;
+  dragStart = pos;
+  cropAtDragStart = { ...crop };
 }
 
-function moveCrop(e) {
-  if (!isDragging) return;
+function onPointerMove(e) {
+  if (!dragMode) return;
+  e.preventDefault();
   const pos = getPos(e);
-  const x = Math.min(dragStart.x, pos.x);
-  const y = Math.min(dragStart.y, pos.y);
-  const w = Math.abs(pos.x - dragStart.x);
-  const h = Math.abs(pos.y - dragStart.y);
-  if (w > 5 && h > 5) {
-    cropRect = {
-      x: Math.max(0, x),
-      y: Math.max(0, y),
-      w: Math.min(w, editorCanvas.width - x),
-      h: Math.min(h, editorCanvas.height - y)
-    };
+  const dx = pos.x - dragStart.x;
+  const dy = pos.y - dragStart.y;
+  const c = { ...cropAtDragStart };
+
+  if (dragMode === 'move') {
+    crop.x = c.x + dx;
+    crop.y = c.y + dy;
+  } else {
+    if (dragMode.includes('l')) { crop.x = c.x + dx; crop.w = c.w - dx; }
+    if (dragMode.includes('r')) { crop.w = c.w + dx; }
+    if (dragMode.includes('t')) { crop.y = c.y + dy; crop.h = c.h - dy; }
+    if (dragMode.includes('b')) { crop.h = c.h + dy; }
   }
+
+  clampCrop();
   renderEditor();
 }
 
-function endCrop() { isDragging = false; }
+function onPointerUp() { dragMode = null; }
+
+// Update cursor on hover (desktop)
+editorCanvas.addEventListener('mousemove', (e) => {
+  if (dragMode) return;
+  const pos = getPos(e);
+  const zone = getHitZone(pos.x, pos.y);
+  const cursors = { tl:'nw-resize', tr:'ne-resize', bl:'sw-resize', br:'se-resize',
+                    t:'n-resize', b:'s-resize', l:'w-resize', r:'e-resize', move:'move' };
+  editorCanvas.style.cursor = cursors[zone] || 'default';
+});
+
+editorCanvas.addEventListener('mousedown', onPointerDown);
+editorCanvas.addEventListener('mousemove', onPointerMove);
+editorCanvas.addEventListener('mouseup', onPointerUp);
+
+editorCanvas.addEventListener('touchstart', onPointerDown, { passive: false });
+editorCanvas.addEventListener('touchmove', onPointerMove, { passive: false });
+editorCanvas.addEventListener('touchend', onPointerUp);
 
 // Rotate buttons
 document.getElementById('tool-rotate-ccw').addEventListener('click', () => {
   rotation = (rotation + 3) % 4;
-  cropRect = null;
-  renderEditor();
+  renderEditor(); resetCropToFull();
 });
-
 document.getElementById('tool-rotate-cw').addEventListener('click', () => {
   rotation = (rotation + 1) % 4;
-  cropRect = null;
-  renderEditor();
+  renderEditor(); resetCropToFull();
 });
-
 document.getElementById('tool-reset').addEventListener('click', () => {
   rotation = 0;
-  cropRect = null;
-  renderEditor();
+  renderEditor(); resetCropToFull();
 });
 
-// Cancel
 document.getElementById('editor-cancel').addEventListener('click', () => {
   editorModal.classList.remove('open');
 });
 
-// Done — flatten to final canvas, send to OCR
+// Done — apply rotation + crop, send to OCR
 document.getElementById('editor-done').addEventListener('click', () => {
   const finalCanvas = document.createElement('canvas');
   const fctx = finalCanvas.getContext('2d');
@@ -1369,55 +1430,41 @@ document.getElementById('editor-done').addEventListener('click', () => {
   const rotated = rotation % 2 !== 0;
   const srcW = editorImg.width;
   const srcH = editorImg.height;
-
-  // Full rotated size
   const fullW = rotated ? srcH : srcW;
   const fullH = rotated ? srcW : srcH;
 
-  if (cropRect) {
-    // Scale cropRect back to full image coordinates
-    const { w: canvasW, h: canvasH } = getCanvasSize();
-    const scaleX = fullW / canvasW;
-    const scaleY = fullH / canvasH;
-    const cx = cropRect.x * scaleX;
-    const cy = cropRect.y * scaleY;
-    const cw = cropRect.w * scaleX;
-    const ch = cropRect.h * scaleY;
+  const { w: canvasW, h: canvasH } = getCanvasSize();
+  const scaleX = fullW / canvasW;
+  const scaleY = fullH / canvasH;
 
-    finalCanvas.width = Math.round(cw);
-    finalCanvas.height = Math.round(ch);
+  const cx = crop.x * scaleX;
+  const cy = crop.y * scaleY;
+  const cw = crop.w * scaleX;
+  const ch = crop.h * scaleY;
 
-    // Draw full rotated image offset so crop region is at origin
-    fctx.save();
-    fctx.translate(-cx, -cy);
-    fctx.translate(fullW / 2, fullH / 2);
-    fctx.rotate((rotation * Math.PI) / 2);
-    fctx.drawImage(editorImg, -srcW / 2, -srcH / 2, srcW, srcH);
-    fctx.restore();
-  } else {
-    finalCanvas.width = fullW;
-    finalCanvas.height = fullH;
-    fctx.save();
-    fctx.translate(fullW / 2, fullH / 2);
-    fctx.rotate((rotation * Math.PI) / 2);
-    fctx.drawImage(editorImg, -srcW / 2, -srcH / 2, srcW, srcH);
-    fctx.restore();
-  }
+  finalCanvas.width = Math.round(cw);
+  finalCanvas.height = Math.round(ch);
+
+  fctx.save();
+  fctx.translate(-cx, -cy);
+  fctx.translate(fullW / 2, fullH / 2);
+  fctx.rotate((rotation * Math.PI) / 2);
+  fctx.drawImage(editorImg, -srcW / 2, -srcH / 2, srcW, srcH);
+  fctx.restore();
 
   const dataUrl = finalCanvas.toDataURL('image/jpeg', 0.95);
-
-  // Show in preview
   previewImg.src = dataUrl;
   previewImg.style.display = 'block';
   uploadZone.classList.add('has-image');
-
   editorModal.classList.remove('open');
 
-  // Convert dataURL to blob for OCR
   finalCanvas.toBlob((blob) => {
-    runOCR(blob);
+    // Manually set type so getMediaType works correctly
+    const typedBlob = new Blob([blob], { type: 'image/jpeg' });
+    runOCR(typedBlob);
   }, 'image/jpeg', 0.95);
 });
+
 
 
 
@@ -1432,7 +1479,7 @@ async function runOCR(file) {
   try {
     // Convert file to base64
     const base64 = await fileToBase64(file);
-    const mediaType = file.type || 'image/jpeg';
+    const mediaType = getMediaType(file);
 
     progressBar.style.width = '35%';
     progressPct.textContent = '35%';
@@ -1493,6 +1540,16 @@ function fileToBase64(file) {
     reader.onerror = reject;
     reader.readAsDataURL(file);
   });
+}
+
+function getMediaType(file) {
+  // canvas.toBlob() blobs sometimes have empty type — always default to jpeg
+  const t = file.type;
+  if (!t || t === '' || t === 'application/octet-stream') return 'image/jpeg';
+  if (t === 'image/jpg') return 'image/jpeg';
+  // Claude only accepts jpeg, png, gif, webp
+  if (['image/jpeg','image/png','image/gif','image/webp'].includes(t)) return t;
+  return 'image/jpeg';
 }
 
 function cleanText(raw) {
