@@ -1017,12 +1017,14 @@
     <div class="setting-row">
       <label>Narrator Voice</label>
       <select id="voice-select">
-        <option value="9BWtsMINqrJLrRacOk9x">Aria — Indian Female</option>
-        <option value="CwhRBWXzGAHq8TQ4Fs17">Roger — Indian Male</option>
-        <option value="EXAVITQu4vr4xnSDxMaL">Sarah — Warm Female</option>
-        <option value="TX3LPaxmHKxFdv7VOQHJ">Liam — Calm Male</option>
-        <option value="XB0fDUnXU5powFXDhCwa">Charlotte — Expressive Female</option>
-        <option value="pFZP5JQG7iQjIQuC4Bku">Lily — Soft Female</option>
+        <option value="21m00Tcm4TlvDq8ikWAM">Rachel — Calm Female</option>
+        <option value="AZnzlk1XvdvUeBnXmlld">Domi — Strong Female</option>
+        <option value="EXAVITQu4vr4xnSDxMaL">Bella — Warm Female</option>
+        <option value="ErXwobaYiN019PkySvjV">Antoni — Narration Male</option>
+        <option value="MF3mGyEYCl7XYWbV9V6O">Elli — Expressive Female</option>
+        <option value="TxGEqnHWrfWFTfGW9XjX">Josh — Deep Male</option>
+        <option value="VR6AewLTigWG4xSOukaG">Arnold — Authoritative Male</option>
+        <option value="pNInz6obpgDQGcFmaJgB">Adam — Narrator Male</option>
       </select>
     </div>
     <div class="setting-row">
@@ -1654,13 +1656,6 @@ function updateWordCount() {
 extractedText.addEventListener('input', updateWordCount);
 
 // ─── Voice loading ────────────────────────────────────────────────────────────
-rateSlider.addEventListener('input', () => {
-  rateVal.textContent = parseFloat(rateSlider.value).toFixed(2).replace(/\.?0+$/, '') + '×';
-});
-
-pitchSlider.addEventListener('input', () => {
-  pitchVal.textContent = parseFloat(pitchSlider.value).toFixed(2).replace(/\.?0+$/, '');
-});
 
 // ─── Text preprocessing ────────────────────────────────────────────────────────
 function prepareTextForSpeech(text) {
@@ -1695,8 +1690,15 @@ function prepareTextForSpeech(text) {
     .trim();
 }
 
-// ─── ElevenLabs TTS ───────────────────────────────────────────────────────────
-let audioEl = null;
+rateSlider.addEventListener('input', () => {
+  rateVal.textContent = parseFloat(rateSlider.value).toFixed(2).replace(/\.?0+$/, '') + '×';
+});
+pitchSlider.addEventListener('input', () => {
+  pitchVal.textContent = parseFloat(pitchSlider.value).toFixed(2).replace(/\.?0+$/, '');
+});
+
+// ─── ElevenLabs TTS — via server proxy ────────────────────────────────────────
+let audioEl  = null;
 let audioUrl = null;
 
 convertBtn.addEventListener('click', startSpeech);
@@ -1705,17 +1707,16 @@ async function startSpeech() {
   const text = extractedText.value.trim();
   if (!text) return;
 
-  // Stop any current playback
   if (audioEl) { audioEl.pause(); audioEl = null; }
   if (audioUrl) { URL.revokeObjectURL(audioUrl); audioUrl = null; }
 
   convertBtn.disabled = true;
   convertBtn.textContent = 'Generating audio…';
 
-  const prepared = prepareTextForSpeech(text);
+  const prepared  = prepareTextForSpeech(text);
   const voiceId   = voiceSelect.value;
-  const speed     = parseFloat(rateSlider.value);
-  const stability = parseFloat(pitchSlider.value);
+  const speed     = Math.min(Math.max(parseFloat(rateSlider.value), 0.7), 1.2);
+  const stability = Math.min(Math.max(parseFloat(pitchSlider.value), 0.1), 1.0);
 
   try {
     const resp = await fetch('/api/tts', {
@@ -1725,15 +1726,16 @@ async function startSpeech() {
     });
 
     if (!resp.ok) {
-      const e = await resp.json().catch(() => ({}));
-      throw new Error(e.error || `TTS failed (${resp.status})`);
+      const errText = await resp.text();
+      let errMsg = `TTS failed (${resp.status})`;
+      try { const j = JSON.parse(errText); errMsg = j?.error || j?.detail?.message || j?.detail || errMsg; } catch(_) {}
+      throw new Error(errMsg);
     }
 
     const blob = await resp.blob();
     audioUrl = URL.createObjectURL(blob);
     audioEl  = new Audio(audioUrl);
 
-    // Player setup
     const words = text.split(/\s+/).length;
     showLabel('step4-label');
     showEl(audioPlayer);
@@ -1746,24 +1748,20 @@ async function startSpeech() {
       timeTotal.textContent = fmtTime(audioEl.duration);
       estimatedDuration = audioEl.duration;
     });
-
     audioEl.addEventListener('timeupdate', () => {
       if (!audioEl.duration) return;
-      const pct = (audioEl.currentTime / audioEl.duration) * 100;
-      trackFill.style.width = pct + '%';
+      trackFill.style.width = (audioEl.currentTime / audioEl.duration * 100) + '%';
       timeCurrent.textContent = fmtTime(audioEl.currentTime);
     });
-
     audioEl.addEventListener('ended', () => {
       setPlaying(false);
       trackFill.style.width = '100%';
       showEl(downloadStrip);
       showToast('Audio ready · Tap save to download');
     });
-
     audioEl.addEventListener('error', () => {
       setPlaying(false);
-      showStatus('Playback error', 'error');
+      showStatus('Playback error — try again', 'error');
     });
 
     audioEl.play();
