@@ -21,20 +21,26 @@ export default async function handler(req, res) {
       },
       body: JSON.stringify({
         text,
-        model_id: 'eleven_turbo_v2_5',
+        model_id: 'eleven_turbo_v2',
+        // speed is a top-level param, NOT inside voice_settings
+        speed: Math.min(Math.max(parseFloat(speed), 0.7), 1.2),
         voice_settings: {
-          stability:        Math.min(Math.max(stability, 0.1), 1.0),
+          stability:        Math.min(Math.max(parseFloat(stability), 0.1), 1.0),
           similarity_boost: 0.82,
-          style:            0.45,   // expressiveness
-          use_speaker_boost: true,
-          speed:            Math.min(Math.max(speed, 0.7), 1.2)
+          style:            0.45,
+          use_speaker_boost: true
         }
       })
     });
 
     if (!response.ok) {
-      const err = await response.json().catch(() => ({}));
-      return res.status(response.status).json({ error: err.detail?.message || err.detail || 'ElevenLabs error' });
+      let errMsg = 'ElevenLabs error';
+      try {
+        const err = await response.json();
+        errMsg = err?.detail?.message || err?.detail || JSON.stringify(err);
+      } catch (_) {}
+      console.error('ElevenLabs error:', response.status, errMsg);
+      return res.status(response.status).json({ error: errMsg });
     }
 
     const buffer = await response.arrayBuffer();

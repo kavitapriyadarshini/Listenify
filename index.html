@@ -1726,7 +1726,7 @@ async function startSpeech() {
 
     if (!resp.ok) {
       const e = await resp.json().catch(() => ({}));
-      throw new Error(e.error || 'TTS generation failed');
+      throw new Error(e.error || `TTS failed (${resp.status})`);
     }
 
     const blob = await resp.blob();
