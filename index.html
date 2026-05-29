@@ -11,7 +11,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
-<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+
 <style>
   :root {
     --bg: #0d0d0d;
@@ -208,6 +208,114 @@
     padding: 8px 16px;
     border-radius: 20px;
     backdrop-filter: blur(8px);
+  }
+
+  /* Image editor modal */
+  .editor-modal {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.92);
+    z-index: 500;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    padding: 0;
+  }
+
+  .editor-modal.open { display: flex; }
+
+  .editor-topbar {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 20px;
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+    flex-shrink: 0;
+  }
+
+  .editor-topbar span {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text-primary);
+    font-family: 'Playfair Display', serif;
+  }
+
+  .editor-topbar button {
+    background: none;
+    border: none;
+    color: var(--text-secondary);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 13px;
+    cursor: pointer;
+    padding: 6px 12px;
+    border-radius: 8px;
+    transition: all 0.2s;
+  }
+
+  .editor-topbar button:hover { color: var(--text-primary); background: rgba(255,255,255,0.07); }
+  .editor-topbar .btn-done { color: var(--accent); font-weight: 600; }
+  .editor-topbar .btn-done:hover { background: var(--accent-dim); }
+
+  .editor-canvas-wrap {
+    flex: 1;
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    position: relative;
+    padding: 16px;
+  }
+
+  #editor-canvas {
+    max-width: 100%;
+    max-height: 100%;
+    display: block;
+    cursor: crosshair;
+    touch-action: none;
+  }
+
+  /* Crop overlay drawn on canvas - handled in JS */
+
+  .editor-toolbar {
+    width: 100%;
+    padding: 14px 20px 28px;
+    border-top: 1px solid rgba(255,255,255,0.08);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    flex-shrink: 0;
+    flex-wrap: wrap;
+  }
+
+  .tool-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 5px;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 12px;
+    padding: 10px 16px;
+    cursor: pointer;
+    transition: all 0.2s;
+    color: var(--text-secondary);
+    min-width: 68px;
+  }
+
+  .tool-btn:hover { background: rgba(255,255,255,0.1); color: var(--text-primary); }
+  .tool-btn.active { border-color: var(--accent); color: var(--accent); background: var(--accent-dim); }
+
+  .tool-btn svg { width: 20px; height: 20px; stroke: currentColor; fill: none; stroke-width: 1.5; }
+  .tool-btn span { font-size: 11px; font-weight: 500; letter-spacing: 0.3px; }
+
+  .tool-divider {
+    width: 1px;
+    height: 40px;
+    background: rgba(255,255,255,0.08);
   }
 
   /* Camera button */
@@ -920,6 +1028,39 @@
   </div>
 </div>
 
+<!-- Image Editor Modal -->
+<div class="editor-modal" id="editor-modal">
+  <div class="editor-topbar">
+    <button id="editor-cancel">Cancel</button>
+    <span>Adjust Image</span>
+    <button class="btn-done" id="editor-done">Use Image</button>
+  </div>
+
+  <div class="editor-canvas-wrap">
+    <canvas id="editor-canvas"></canvas>
+  </div>
+
+  <div class="editor-toolbar">
+    <button class="tool-btn" id="tool-rotate-ccw" title="Rotate 90° left">
+      <svg viewBox="0 0 24 24"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.5"/></svg>
+      <span>Rotate L</span>
+    </button>
+    <button class="tool-btn" id="tool-rotate-cw" title="Rotate 90° right">
+      <svg viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-.49-3.5"/></svg>
+      <span>Rotate R</span>
+    </button>
+    <div class="tool-divider"></div>
+    <button class="tool-btn active" id="tool-crop" title="Crop">
+      <svg viewBox="0 0 24 24"><polyline points="6 2 6 18 22 18"/><polyline points="2 6 18 6 18 22"/></svg>
+      <span>Crop</span>
+    </button>
+    <button class="tool-btn" id="tool-reset" title="Reset">
+      <svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+      <span>Reset</span>
+    </button>
+  </div>
+</div>
+
 <!-- Toast -->
 <div class="toast" id="toast"></div>
 
@@ -1019,17 +1160,17 @@ function handleFile(file) {
   imageFile = file;
   const reader = new FileReader();
   reader.onload = (e) => {
-    previewImg.src = e.target.result;
-    previewImg.style.display = 'block';
-    uploadZone.classList.add('has-image');
-    runOCR(file);
+    openEditor(e.target.result);
   };
   reader.readAsDataURL(file);
 }
 
 uploadZone.addEventListener('click', (e) => {
-  if (!e.target.closest('input')) fileInput.click();
+  if (!e.target.closest('input') && !uploadZone.classList.contains('has-image')) fileInput.click();
 });
+
+// Allow re-upload by clicking the image
+previewImg.addEventListener('click', () => fileInput.click());
 
 fileInput.addEventListener('change', (e) => {
   if (e.target.files[0]) handleFile(e.target.files[0]);
@@ -1057,47 +1198,277 @@ uploadZone.addEventListener('drop', (e) => {
   if (file) handleFile(file);
 });
 
-// ─── OCR ──────────────────────────────────────────────────────────────────────
+// ─── Image Editor ─────────────────────────────────────────────────────────────
+const editorModal = document.getElementById('editor-modal');
+const editorCanvas = document.getElementById('editor-canvas');
+const ctx = editorCanvas.getContext('2d');
+
+let editorImg = new Image();
+let rotation = 0; // in 90-deg steps (0,1,2,3)
+let cropRect = null;   // {x,y,w,h} in canvas coords
+let isDragging = false;
+let dragStart = null;
+let originalSrc = null;
+
+function openEditor(src) {
+  originalSrc = src;
+  rotation = 0;
+  cropRect = null;
+  editorImg = new Image();
+  editorImg.onload = () => {
+    editorModal.classList.add('open');
+    renderEditor();
+  };
+  editorImg.src = src;
+}
+
+function getCanvasSize() {
+  const wrap = document.querySelector('.editor-canvas-wrap');
+  const maxW = wrap.clientWidth - 32;
+  const maxH = wrap.clientHeight - 32;
+
+  // Apply rotation to determine natural w/h
+  const rotated = rotation % 2 !== 0;
+  const imgW = rotated ? editorImg.height : editorImg.width;
+  const imgH = rotated ? editorImg.width : editorImg.height;
+
+  const scale = Math.min(maxW / imgW, maxH / imgH, 1);
+  return { w: Math.round(imgW * scale), h: Math.round(imgH * scale), scale };
+}
+
+function renderEditor() {
+  const { w, h } = getCanvasSize();
+  editorCanvas.width = w;
+  editorCanvas.height = h;
+
+  ctx.clearRect(0, 0, w, h);
+
+  // Draw rotated image
+  ctx.save();
+  ctx.translate(w / 2, h / 2);
+  ctx.rotate((rotation * Math.PI) / 2);
+  const rotated = rotation % 2 !== 0;
+  const dw = rotated ? h : w;
+  const dh = rotated ? w : h;
+  ctx.drawImage(editorImg, -dw / 2, -dh / 2, dw, dh);
+  ctx.restore();
+
+  // Dim outside crop rect
+  if (cropRect) {
+    const { x, y, w: cw, h: ch } = cropRect;
+    ctx.fillStyle = 'rgba(0,0,0,0.55)';
+    ctx.fillRect(0, 0, w, y);
+    ctx.fillRect(0, y + ch, w, h - y - ch);
+    ctx.fillRect(0, y, x, ch);
+    ctx.fillRect(x + cw, y, w - x - cw, ch);
+
+    // Crop border
+    ctx.strokeStyle = 'rgba(201,169,110,0.9)';
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([]);
+    ctx.strokeRect(x, y, cw, ch);
+
+    // Corner handles
+    const hs = 10;
+    ctx.fillStyle = 'rgba(201,169,110,1)';
+    [[x, y],[x+cw-hs, y],[x, y+ch-hs],[x+cw-hs, y+ch-hs]].forEach(([hx,hy]) => {
+      ctx.fillRect(hx, hy, hs, hs);
+    });
+
+    // Rule-of-thirds grid
+    ctx.strokeStyle = 'rgba(201,169,110,0.25)';
+    ctx.lineWidth = 0.5;
+    for (let i = 1; i < 3; i++) {
+      ctx.beginPath(); ctx.moveTo(x + cw * i/3, y); ctx.lineTo(x + cw * i/3, y + ch); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(x, y + ch * i/3); ctx.lineTo(x + cw, y + ch * i/3); ctx.stroke();
+    }
+  }
+}
+
+// Mouse / touch helpers
+function getPos(e) {
+  const rect = editorCanvas.getBoundingClientRect();
+  const scaleX = editorCanvas.width / rect.width;
+  const scaleY = editorCanvas.height / rect.height;
+  if (e.touches) {
+    return {
+      x: (e.touches[0].clientX - rect.left) * scaleX,
+      y: (e.touches[0].clientY - rect.top) * scaleY
+    };
+  }
+  return {
+    x: (e.clientX - rect.left) * scaleX,
+    y: (e.clientY - rect.top) * scaleY
+  };
+}
+
+editorCanvas.addEventListener('mousedown', startCrop);
+editorCanvas.addEventListener('touchstart', (e) => { e.preventDefault(); startCrop(e); }, { passive: false });
+
+editorCanvas.addEventListener('mousemove', moveCrop);
+editorCanvas.addEventListener('touchmove', (e) => { e.preventDefault(); moveCrop(e); }, { passive: false });
+
+editorCanvas.addEventListener('mouseup', endCrop);
+editorCanvas.addEventListener('touchend', endCrop);
+
+function startCrop(e) {
+  isDragging = true;
+  dragStart = getPos(e);
+  cropRect = null;
+}
+
+function moveCrop(e) {
+  if (!isDragging) return;
+  const pos = getPos(e);
+  const x = Math.min(dragStart.x, pos.x);
+  const y = Math.min(dragStart.y, pos.y);
+  const w = Math.abs(pos.x - dragStart.x);
+  const h = Math.abs(pos.y - dragStart.y);
+  if (w > 5 && h > 5) {
+    cropRect = {
+      x: Math.max(0, x),
+      y: Math.max(0, y),
+      w: Math.min(w, editorCanvas.width - x),
+      h: Math.min(h, editorCanvas.height - y)
+    };
+  }
+  renderEditor();
+}
+
+function endCrop() { isDragging = false; }
+
+// Rotate buttons
+document.getElementById('tool-rotate-ccw').addEventListener('click', () => {
+  rotation = (rotation + 3) % 4;
+  cropRect = null;
+  renderEditor();
+});
+
+document.getElementById('tool-rotate-cw').addEventListener('click', () => {
+  rotation = (rotation + 1) % 4;
+  cropRect = null;
+  renderEditor();
+});
+
+document.getElementById('tool-reset').addEventListener('click', () => {
+  rotation = 0;
+  cropRect = null;
+  renderEditor();
+});
+
+// Cancel
+document.getElementById('editor-cancel').addEventListener('click', () => {
+  editorModal.classList.remove('open');
+});
+
+// Done — flatten to final canvas, send to OCR
+document.getElementById('editor-done').addEventListener('click', () => {
+  const finalCanvas = document.createElement('canvas');
+  const fctx = finalCanvas.getContext('2d');
+
+  const rotated = rotation % 2 !== 0;
+  const srcW = editorImg.width;
+  const srcH = editorImg.height;
+
+  // Full rotated size
+  const fullW = rotated ? srcH : srcW;
+  const fullH = rotated ? srcW : srcH;
+
+  if (cropRect) {
+    // Scale cropRect back to full image coordinates
+    const { w: canvasW, h: canvasH } = getCanvasSize();
+    const scaleX = fullW / canvasW;
+    const scaleY = fullH / canvasH;
+    const cx = cropRect.x * scaleX;
+    const cy = cropRect.y * scaleY;
+    const cw = cropRect.w * scaleX;
+    const ch = cropRect.h * scaleY;
+
+    finalCanvas.width = Math.round(cw);
+    finalCanvas.height = Math.round(ch);
+
+    // Draw full rotated image offset so crop region is at origin
+    fctx.save();
+    fctx.translate(-cx, -cy);
+    fctx.translate(fullW / 2, fullH / 2);
+    fctx.rotate((rotation * Math.PI) / 2);
+    fctx.drawImage(editorImg, -srcW / 2, -srcH / 2, srcW, srcH);
+    fctx.restore();
+  } else {
+    finalCanvas.width = fullW;
+    finalCanvas.height = fullH;
+    fctx.save();
+    fctx.translate(fullW / 2, fullH / 2);
+    fctx.rotate((rotation * Math.PI) / 2);
+    fctx.drawImage(editorImg, -srcW / 2, -srcH / 2, srcW, srcH);
+    fctx.restore();
+  }
+
+  const dataUrl = finalCanvas.toDataURL('image/jpeg', 0.95);
+
+  // Show in preview
+  previewImg.src = dataUrl;
+  previewImg.style.display = 'block';
+  uploadZone.classList.add('has-image');
+
+  editorModal.classList.remove('open');
+
+  // Convert dataURL to blob for OCR
+  finalCanvas.toBlob((blob) => {
+    runOCR(blob);
+  }, 'image/jpeg', 0.95);
+});
+
+
+
+// ─── OCR via Claude Vision ────────────────────────────────────────────────────
 async function runOCR(file) {
   showEl(ocrProgress);
   statusMsg.className = 'status-msg';
-  progressBar.style.width = '0%';
-  progressPct.textContent = '0%';
-  progressText.textContent = 'Initialising scanner…';
+  progressBar.style.width = '10%';
+  progressPct.textContent = '10%';
+  progressText.textContent = 'Reading image…';
 
   try {
-    const worker = await Tesseract.createWorker('eng', 1, {
-      logger: m => {
-        if (m.status === 'recognizing text') {
-          const pct = Math.round(m.progress * 100);
-          progressBar.style.width = pct + '%';
-          progressPct.textContent = pct + '%';
-          progressText.textContent = pct < 50 ? 'Scanning layout…' : 'Extracting characters…';
-        } else if (m.status === 'loading tesseract core') {
-          progressText.textContent = 'Loading OCR engine…';
-        } else if (m.status === 'initializing tesseract') {
-          progressText.textContent = 'Starting up…';
-        }
-      }
+    // Convert file to base64
+    const base64 = await fileToBase64(file);
+    const mediaType = file.type || 'image/jpeg';
+
+    progressBar.style.width = '35%';
+    progressPct.textContent = '35%';
+    progressText.textContent = 'Analysing text with AI…';
+
+    const response = await fetch('/api/ocr', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ base64, mediaType })
     });
 
-    progressText.textContent = 'Processing image…';
-    const { data: { text } } = await worker.recognize(file);
-    await worker.terminate();
+    progressBar.style.width = '80%';
+    progressPct.textContent = '80%';
+    progressText.textContent = 'Processing results…';
 
-    const cleaned = cleanText(text);
+    if (!response.ok) {
+      const err = await response.json();
+      throw new Error(err.error || 'API error');
+    }
+
+    const data = await response.json();
+    const text = data.text || '';
+
+    progressBar.style.width = '100%';
+    progressPct.textContent = '100%';
 
     hideEl(ocrProgress);
 
-    if (!cleaned.trim()) {
+    if (!text) {
       showStatus('No text found in this image. Try a clearer photo.', 'error');
       return;
     }
 
-    extractedText.value = cleaned;
+    extractedText.value = text;
     updateWordCount();
 
-    // Show panels
     showLabel('step2-label');
     showEl(textPanel);
     showLabel('step3-label');
@@ -1110,9 +1481,18 @@ async function runOCR(file) {
 
   } catch (err) {
     hideEl(ocrProgress);
-    showStatus('Scan failed. Please try a clearer image.', 'error');
+    showStatus('Scan failed: ' + err.message, 'error');
     console.error(err);
   }
+}
+
+function fileToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result.split(',')[1]);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
 }
 
 function cleanText(raw) {
@@ -1175,8 +1555,57 @@ pitchSlider.addEventListener('input', () => {
 
 // ─── Text preprocessing for natural narration ─────────────────────────────────
 function prepareTextForSpeech(text) {
+  // ── Step 1: Fix drop caps ──────────────────────────────────────────────────
+  // Claude OCR sometimes returns a drop cap as an isolated capital letter on
+  // its own line, separated from the rest of the word.
+  // e.g.  "W\nhy isn't this working?" → "Why isn't this working?"
+  // e.g.  "T\nt was the first warm day" → "It was the first warm day"  (drop cap 'I' + 't')
+  // Pattern: single capital letter at start of text or after a blank line,
+  // followed by a newline, followed by lowercase letters continuing the word.
+  text = text.replace(/(^|\n\n)([A-Z])\n([a-z])/g, (match, before, cap, rest) => {
+    return before + cap + rest;
+  });
+
+  // Also handle: isolated capital on its own paragraph that is actually the
+  // first letter of the next word (e.g.  "W\nhy" at very start)
+  text = text.replace(/^([A-Z])\n([a-z])/m, '$1$2');
+
+  // ── Step 2: Year pronunciation ────────────────────────────────────────────
+  // Convert 4-digit years to natural spoken form:
+  // 1800–1899 → "eighteen XX"
+  // 1900–1999 → "nineteen XX"
+  // 2000–2009 → "two thousand and X"  (these ARE spoken as two-thousand)
+  // 2010–2099 → "twenty XX"
+  // 1000–1799 → leave as-is (rare in prose; TTS handles these okay)
+  text = text.replace(/\b(1[0-9])([0-9]{2})\b/g, (match, century, rest) => {
+    const c = parseInt(century, 10);
+    const r = parseInt(rest, 10);
+    const centuries = {
+      10:'ten', 11:'eleven', 12:'twelve', 13:'thirteen', 14:'fourteen',
+      15:'fifteen', 16:'sixteen', 17:'seventeen', 18:'eighteen', 19:'nineteen'
+    };
+    const prefix = centuries[c] || match;
+    if (r === 0) return prefix + ' hundred';
+    if (r < 10)  return prefix + ' oh ' + r;
+    return prefix + ' ' + r;
+  });
+
+  // 2010–2099
+  text = text.replace(/\b(20)([1-9][0-9])\b/g, (match, _, rest) => {
+    return 'twenty ' + parseInt(rest, 10);
+  });
+
+  // 2001–2009
+  text = text.replace(/\b(200)([1-9])\b/g, (match, _, d) => {
+    const words = ['','one','two','three','four','five','six','seven','eight','nine'];
+    return 'two thousand and ' + words[parseInt(d, 10)];
+  });
+
+  // 2000
+  text = text.replace(/\b2000\b/g, 'two thousand');
+
   return text
-    // Expand abbreviations
+    // ── Step 3: Abbreviations ──────────────────────────────────────────────
     .replace(/\bDr\./g, 'Doctor')
     .replace(/\bMr\./g, 'Mister')
     .replace(/\bMrs\./g, 'Missus')
@@ -1185,11 +1614,10 @@ function prepareTextForSpeech(text) {
     .replace(/\betc\./gi, 'et cetera,')
     .replace(/\be\.g\./gi, 'for example,')
     .replace(/\bi\.e\./gi, 'that is,')
-    // Add slight pause after colons and semicolons
+    // ── Step 4: Natural pauses ─────────────────────────────────────────────
     .replace(/([;:])\s/g, '$1  ')
-    // Paragraph breaks get a longer pause
     .replace(/\n\n/g, '. \n\n')
-    // Clean up
+    // ── Step 5: Clean up ───────────────────────────────────────────────────
     .replace(/\s+/g, ' ')
     .trim();
 }
