@@ -5,9 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="Listenify">
+<meta name="apple-mobile-web-app-title" content="Click2Listen">
 <meta name="theme-color" content="#0d0d0d">
-<title>Listenify — Scan & Listen</title>
+<title>Click2Listen — Scan & Listen</title>
 <link rel="manifest" href="manifest.json">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
@@ -957,7 +957,7 @@
         <path d="M9 18V5l12-2v13M9 18c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-2c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2z"/>
       </svg>
     </div>
-    <h1>Listenify</h1>
+    <h1>Click2Listen</h1>
     <p>Scan any document · Listen anywhere</p>
   </div>
 
@@ -1092,7 +1092,7 @@
 
   <!-- iOS install guide -->
   <div class="ios-guide" id="ios-guide">
-    <h4>Add Listenify to your Home Screen</h4>
+    <h4>Add Click2Listen to your Home Screen</h4>
     <div class="ios-step">
       <div class="ios-step-num">1</div>
       <span>Tap the <strong>Share</strong> button in Safari's toolbar</span>
@@ -1103,7 +1103,7 @@
     </div>
     <div class="ios-step">
       <div class="ios-step-num">3</div>
-      <span>Tap <strong>Add</strong> — Listenify will appear on your home screen</span>
+      <span>Tap <strong>Add</strong> — Click2Listen will appear on your home screen</span>
     </div>
   </div>
 
@@ -1118,7 +1118,7 @@
   </div>
   <div class="install-text">
     <strong>Add to Home Screen</strong>
-    <span>Use Listenify as an app, anytime</span>
+    <span>Use Click2Listen as an app, anytime</span>
   </div>
   <div class="install-actions">
     <button class="btn-install" id="btn-install">Install</button>
@@ -1834,7 +1834,7 @@ downloadStrip.addEventListener('click', () => {
   if (!audioUrl) return;
   const a = document.createElement('a');
   a.href = audioUrl;
-  a.download = 'listenify-audio.mp3';
+  a.download = 'click2listen-audio.mp3';
   a.click();
   showToast('Audio downloaded!');
 });
@@ -1859,7 +1859,7 @@ btnInstall.addEventListener('click', async () => {
   installBanner.classList.remove('show');
   deferredInstallPrompt.prompt();
   const { outcome } = await deferredInstallPrompt.userChoice;
-  if (outcome === 'accepted') showToast('Listenify added to home screen!');
+  if (outcome === 'accepted') showToast('Click2Listen added to home screen!');
   deferredInstallPrompt = null;
 });
 
@@ -1869,7 +1869,7 @@ btnDismiss.addEventListener('click', () => {
 
 window.addEventListener('appinstalled', () => {
   installBanner.classList.remove('show');
-  showToast('Listenify installed successfully!');
+  showToast('Click2Listen installed successfully!');
 });
 
 // Register service worker

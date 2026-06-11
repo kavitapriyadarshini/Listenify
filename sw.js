@@ -1,4 +1,4 @@
-const CACHE = 'listenify-v1';
+const CACHE = 'click2listen-v1';
 const ASSETS = [
   '/',
   '/index.html',

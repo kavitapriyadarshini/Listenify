@@ -1,6 +1,6 @@
 {
-  "name": "Listenify — Scan & Listen",
-  "short_name": "Listenify",
+  "name": "Click2Listen — Scan & Listen",
+  "short_name": "Click2Listen",
   "description": "Scan any document, book, or policy and listen to it anywhere.",
   "start_url": "/",
   "display": "standalone",
